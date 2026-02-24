@@ -1,0 +1,211 @@
+
+// generator client {
+//   provider = "prisma-client-js"
+//   output   = "../app/generated/prisma"
+// }
+
+// datasource db {
+//   provider = "postgresql"
+// }
+
+// model User {
+//   id              String          @id @default(uuid())
+//   name            String
+//   email           String          @unique
+//   role            String  
+//   password        String                  
+//   madePolicies    PolicyEngine[]  @relation("Maker")
+//   checkedPolicies PolicyEngine[]  @relation("Checker")
+//   assignedReviews ApprovalQueue[] @relation("Reviewer")
+// }
+
+// model PolicyEngine {
+//   id              String          @id @default(uuid())
+//   name            String          
+//   product         String          
+//   status          String  
+//   version         String
+//   startDate       DateTime      @default(now()) 
+//   description     String
+//   makerId         String
+//   maker           User            @relation("Maker", fields: [makerId], references: [id])
+//   checkerId       String?
+//   checker         User?           @relation("Checker", fields: [checkerId], references: [id])
+//   approvalQueue   ApprovalQueue?
+//   tabs            Tab[]
+//   createdAt       DateTime        @default(now())
+//   updatedAt       DateTime        @updatedAt
+// }
+// model ApprovalQueue {
+//   id              String        @id @default(uuid())
+//   currentLevel    String        
+//   notes           String?       
+//   timeInQueue     DateTime      @default(now())
+//   policyEngineId  String        @unique
+//   policyEngine    PolicyEngine  @relation(fields: [policyEngineId], references: [id], onDelete: Cascade)
+//   reviewerId      String?       
+//   reviewer        User?         @relation("Reviewer", fields: [reviewerId], references: [id])
+// }
+
+// model Tab {
+//   id              String       @id @default(uuid())
+//   name            String       @unique
+//   isMandatory     Boolean      @default(false) 
+//   orderIndex      Int          
+//   policyEngineId  String
+//   policyEngine    PolicyEngine @relation(fields: [policyEngineId], references: [id], onDelete: Cascade)
+//   subTabs         SubTab[]
+
+//   @@unique([name, policyEngineId])
+// }
+
+// model SubTab {
+//   id              String   @id @default(uuid())
+//   name            String   
+//   orderIndex      Int
+//   tabId           String
+//   tab             Tab      @relation(fields: [tabId], references: [id], onDelete: Cascade)
+//   fields          Field[]
+// }
+
+// model Field {
+//   id              String   @id @default(uuid())
+//   fieldName       String   
+//   fieldType       String  
+//   fieldValues     String?   
+//   rules           String?  
+//   documentNotes   String?  
+//   orderIndex      Int
+//   subTabId        String
+//   subTab          SubTab   @relation(fields: [subTabId], references: [id], onDelete: Cascade)
+// }
+
+
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+generator client {
+  provider = "prisma-client-js"
+  output   = "../app/generated/prisma"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+model User {
+  id               String          @id @default(uuid())
+  name             String
+  email            String          @unique
+  role             String      
+  password         String    
+  madePolicies     PolicyEngine[]  @relation("Maker")
+  checkedPolicies  PolicyEngine[]  @relation("Checker")
+  reviewedQueue    ApprovalQueue[] @relation("Reviewer")
+  createdAt        DateTime        @default(now())
+}
+
+model PolicyEngine {
+  id            String         @id @default(uuid())
+  name          String
+  product       String
+  status        String         
+  version       String         
+  startDate     DateTime       @default(now())
+  description   String?
+  
+  makerId       String
+  maker         User           @relation("Maker", fields: [makerId], references: [id])
+  checkerId     String?
+  checker       User?          @relation("Checker", fields: [checkerId], references: [id])
+  
+  tabs          Tab[]
+  approvalQueue ApprovalQueue?
+  auditLogs     AuditLog[]
+  versions      PolicyVersion[]
+
+  createdAt     DateTime       @default(now())
+  updatedAt     DateTime       @updatedAt
+}
+
+model Tab {
+  id               String       @id @default(uuid())
+  name             String
+  orderIndex       Int
+  policyEngineId   String
+  policy           PolicyEngine @relation(fields: [policyEngineId], references: [id], onDelete: Cascade)
+  subTabs          SubTab[]
+
+  @@unique([name, policyEngineId]) 
+}
+
+model SubTab {
+  id         String   @id @default(uuid())
+  name       String
+  orderIndex Int
+  tabId      String
+  tab        Tab      @relation(fields: [tabId], references: [id], onDelete: Cascade)
+  fields     Field[]
+}
+
+model Field {
+  id            String   @id @default(uuid())
+  fieldName     String   
+  fieldType     String   
+  
+  operator      String?  
+  thresholdValue String? 
+  weightage     Int?     
+  
+  fieldValues   String?  
+  rules         String?  
+  documentNotes String?  
+  orderIndex    Int
+  subTabId      String
+  subTab        SubTab   @relation(fields: [subTabId], references: [id], onDelete: Cascade)
+}
+
+model ApprovalQueue {
+  id              String         @id @default(uuid())
+  currentLevel    String         
+  notes           String?        
+  timeInQueue     DateTime       @default(now())
+  
+  policyEngineId  String         @unique
+  policyEngine    PolicyEngine   @relation(fields: [policyEngineId], references: [id], onDelete: Cascade)
+    
+  reviewerId      String?        
+  reviewer        User?          @relation("Reviewer", fields: [reviewerId], references: [id])
+  
+  executionLogs   ExecutionLog[] 
+}
+
+model ExecutionLog {
+  id              String        @id @default(uuid())
+  approvalQueueId String
+  approvalQueue   ApprovalQueue @relation(fields: [approvalQueueId], references: [id], onDelete: Cascade)
+  ruleName        String       
+  status          String        
+  inputValue      String        
+  thresholdUsed   String        
+  createdAt       DateTime      @default(now())
+}
+
+model AuditLog {
+  id              String       @id @default(uuid())
+  policyEngineId  String
+  policy          PolicyEngine @relation(fields: [policyEngineId], references: [id], onDelete: Cascade)
+  action          String       
+  details         String?      
+  performedBy     String       
+  createdAt       DateTime     @default(now())
+}
+
+model PolicyVersion {
+  id              String       @id @default(uuid())
+  versionNumber   String      
+  snapshotData    Json         
+  policyEngineId  String
+  policyEngine    PolicyEngine @relation(fields: [policyEngineId], references: [id])
+  createdAt       DateTime     @default(now())
+}
