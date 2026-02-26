@@ -7,9 +7,11 @@ import { createTab } from "@/controller/tab.controller";
 export async function POST(req:NextRequest) {
     
     try {
+        const userDataHeader = req.headers.get("x-user-data");
+        const userData = userDataHeader ? JSON.parse(userDataHeader) : undefined;
         const data = await req.json();
 
-        const tab = await createTab(data);
+        const tab = await createTab(data, userData);
 
         return NextResponse.json(
             new ApiResponse(201,"Tab created successfully",tab,true),

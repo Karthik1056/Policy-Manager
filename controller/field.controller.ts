@@ -28,7 +28,8 @@ export const createField = asyncHandler(async (data: fieldInterface, userData?: 
     }
 
     const existingSubTab = await prisma.subTab.findUnique({
-        where: { id: subTabId }
+        where: { id: subTabId },
+        include: { tab: true }
     });
 
     if (!existingSubTab) {
@@ -84,6 +85,10 @@ export const updateField = asyncHandler(async (
             value !== undefined && !["id", "subTabId"].includes(key)
         )
     );
+
+    if (Object.keys(filteredData).length === 0) {
+        return existingField;
+    }
 
     const updatedField = await prisma.field.update({
         where: { id },

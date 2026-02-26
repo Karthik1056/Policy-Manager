@@ -9,7 +9,7 @@ export async function POST(req: NextRequest) {
         const { returnUser, accessToken } = await LoginUser(body);
         
         const response = NextResponse.json(
-            new ApiResponse(200, "Login successful", returnUser, true),
+            new ApiResponse(200, "Login successful", { user: returnUser, accessToken }, true),
             { status: 200 }
         );
 
@@ -22,7 +22,13 @@ export async function POST(req: NextRequest) {
         });
 
         return response;
-    } catch (error: any) {
+    } catch (error: unknown) {
+        if (error instanceof ApiError) {
+            return NextResponse.json(
+                new ApiResponse(error.statusCode, error.message, "", false),
+                { status: error.statusCode }
+            );
+        }
         return NextResponse.json(
             new ApiResponse(500,"Internal server error","",false),
             {status:500}

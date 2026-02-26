@@ -7,6 +7,8 @@ export async function PATCH(req:NextRequest,
 ) {
     try {
         const {id} = await params;
+        const userDataHeader = req.headers.get("x-user-data");
+        const userData = userDataHeader ? JSON.parse(userDataHeader) : undefined;
         
         if(!id){
             return NextResponse.json({message:"Id is required"}, {status:400})
@@ -18,21 +20,27 @@ export async function PATCH(req:NextRequest,
             return NextResponse.json({message:"Data is required"}, {status:400})
         }
 
-        const update = await updateTab(id,data);
+        const update = await updateTab(id,data, userData);
 
         return NextResponse.json(
             new ApiResponse(200, "Tab updated successfully",update,true),
             {status:200}
         )
     } catch (error) {
-        return new ApiResponse(500,"Internal server error","",false)
+        return NextResponse.json(
+            new ApiResponse(500,"Internal server error","",false),
+            {status:500}
+        )
     }
 }
 
 export async function DELETE( 
+    req: NextRequest,
     { params }: { params: Promise<{ id: string }>}){
     try {
         const { id } =  await params;
+        const userDataHeader = req.headers.get("x-user-data");
+        const userData = userDataHeader ? JSON.parse(userDataHeader) : undefined;
 
         if (!id) {
             return NextResponse.json(
@@ -41,7 +49,7 @@ export async function DELETE(
             );
         }
         
-         await deleteTab(id);
+         await deleteTab(id, userData);
 
         return NextResponse.json(
             new ApiResponse(200,"Deleted tab with id successfully","",true),

@@ -4,7 +4,7 @@ import { NextRequest, NextResponse } from "next/server";
 
 export async function POST(req: NextRequest) {
     try {
-        const { policyId, versionNumber } = await req.json();
+        const { policyId, versionNumber, changeNote } = await req.json();
 
         const userDataRaw = req.headers.get("x-user-data");
         const userData = JSON.parse(userDataRaw || "{}");
@@ -13,7 +13,7 @@ export async function POST(req: NextRequest) {
             return NextResponse.json(new ApiResponse(400, "Missing required fields", null, false), { status: 400 });
         }
 
-        const version = await createPolicyVersion(policyId, versionNumber, userData);
+        const version = await createPolicyVersion(policyId, versionNumber, userData, changeNote);
 
         return NextResponse.json(
             new ApiResponse(201, "Version snapshot created successfully", version, true),

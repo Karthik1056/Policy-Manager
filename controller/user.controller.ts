@@ -11,8 +11,9 @@ const generateHash = async (password: string) => {
 }
 
 const generateAccessToken = async (id: string,name:string,email:string,role:string) => {
+    const expiresIn = process.env.ACCESS_TOKEN_EXPIRES_IN;
     return jwt.sign({ id,name,email,role }, process.env.MY_SECRET_KEY as string, {
-        expiresIn: process.env.ACCESS_TOKEN_EXPIRES_IN as any
+        expiresIn: expiresIn ?? "7d"
     });
 }
 
@@ -79,7 +80,11 @@ const LoginUser = asyncHandler(async (data: Pick<UserInterface, 'email' | 'passw
         throw new ApiError(400, "Password is incorrect");
     }
 
-    const accessToken = await generateAccessToken(fetchUser.id,fetchUser.email,fetchUser.name,fetchUser.role);
+    if (role !== fetchUser.role) {
+        throw new ApiError(403, "Role does not match this account");
+    }
+
+    const accessToken = await generateAccessToken(fetchUser.id, fetchUser.name, fetchUser.email, fetchUser.role);
 
     const returnUser = {
         id: fetchUser.id,

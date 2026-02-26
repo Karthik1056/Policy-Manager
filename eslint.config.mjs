@@ -12,6 +12,13 @@ const eslintConfig = defineConfig([
     "out/**",
     "build/**",
     "next-env.d.ts",
+    // Server-only / generated code (skip for frontend-focused linting):
+    "app/api/**",
+    "controller/**",
+    "utils/**",
+    "interface/**",
+    "prisma/**",
+    "app/generated/**",
   ]),
 ]);
 

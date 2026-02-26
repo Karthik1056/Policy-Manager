@@ -8,6 +8,8 @@ export async function PATCH(
 ) {
     try {
         const { id } = await params;
+        const userDataHeader = req.headers.get("x-user-data");
+        const userData = userDataHeader ? JSON.parse(userDataHeader) : undefined;
 
         if (!id) {
             return NextResponse.json(
@@ -18,7 +20,7 @@ export async function PATCH(
 
         const data = await req.json();
 
-        const result = await updateSubTab(id, data);
+        const result = await updateSubTab(id, data, userData);
 
         return NextResponse.json(
             new ApiResponse(200, "SubTab updated successfully", result, true),
@@ -38,6 +40,8 @@ export async function DELETE(
 ) {
     try {
         const { id } = await params;
+        const userDataHeader = req.headers.get("x-user-data");
+        const userData = userDataHeader ? JSON.parse(userDataHeader) : undefined;
 
         if (!id) {
             return NextResponse.json(
@@ -46,7 +50,7 @@ export async function DELETE(
             );
         }
 
-        const result = await deleteSubTab(id);
+        const result = await deleteSubTab(id, userData);
 
         return NextResponse.json(
             new ApiResponse(200, "SubTab deleted successfully", result, true),

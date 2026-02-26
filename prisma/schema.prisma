@@ -132,6 +132,7 @@ model Tab {
   id               String       @id @default(uuid())
   name             String
   orderIndex       Int
+  documentNotes    String?
   policyEngineId   String
   policy           PolicyEngine @relation(fields: [policyEngineId], references: [id], onDelete: Cascade)
   subTabs          SubTab[]
@@ -140,12 +141,13 @@ model Tab {
 }
 
 model SubTab {
-  id         String   @id @default(uuid())
-  name       String
-  orderIndex Int
-  tabId      String
-  tab        Tab      @relation(fields: [tabId], references: [id], onDelete: Cascade)
-  fields     Field[]
+  id            String   @id @default(uuid())
+  name          String
+  orderIndex    Int
+  documentNotes String?
+  tabId         String
+  tab           Tab      @relation(fields: [tabId], references: [id], onDelete: Cascade)
+  fields        Field[]
 }
 
 model Field {
@@ -172,7 +174,7 @@ model ApprovalQueue {
   timeInQueue     DateTime       @default(now())
   
   policyEngineId  String         @unique
-  policyEngine    PolicyEngine   @relation(fields: [policyEngineId], references: [id], onDelete: Cascade)
+  policyEngine    PolicyEngine   @relation(fields: [policyEngineId], references: [id], onDelete: Cascade) 
     
   reviewerId      String?        
   reviewer        User?          @relation("Reviewer", fields: [reviewerId], references: [id])
@@ -205,7 +207,10 @@ model PolicyVersion {
   id              String       @id @default(uuid())
   versionNumber   String      
   snapshotData    Json         
+  changeNote      String?      
   policyEngineId  String
   policyEngine    PolicyEngine @relation(fields: [policyEngineId], references: [id])
   createdAt       DateTime     @default(now())
 }
+
+

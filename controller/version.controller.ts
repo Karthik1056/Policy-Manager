@@ -2,7 +2,7 @@ import { prisma } from "@/lib/prisma";
 import { ApiError } from "@/utils/ApiError";
 import asyncHandler from "@/utils/AsyncHandlerService";
 
-export const createPolicyVersion = asyncHandler(async (policyId: string, versionNumber: string, userData: any) => {
+export const createPolicyVersion = asyncHandler(async (policyId: string, versionNumber: string, userData: any, changeNote?: string) => {
     const policy = await prisma.policyEngine.findUnique({
         where: { id: policyId },
         include: {
@@ -18,7 +18,8 @@ export const createPolicyVersion = asyncHandler(async (policyId: string, version
         data: {
             versionNumber,
             policyEngineId: policyId,
-            snapshotData: policy as any
+            snapshotData: policy as any,
+            changeNote: changeNote || null
         }
     });
 
@@ -26,7 +27,7 @@ export const createPolicyVersion = asyncHandler(async (policyId: string, version
         data: {
             policyEngineId: policyId,
             action: "UPDATED",
-            details: `Created version snapshot: ${versionNumber}`,
+            details: `Created version snapshot: ${versionNumber}${changeNote ? ` - ${changeNote}` : ""}`,
             performedBy: userData.name
         }
     });

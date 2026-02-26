@@ -3,7 +3,7 @@ import { prisma } from "@/lib/prisma";
 import { ApiError } from "@/utils/ApiError";
 import asyncHandler from "@/utils/AsyncHandlerService";
 
-export const createSubTab = asyncHandler(async (data: subTabInterface) => {
+export const createSubTab = asyncHandler(async (data: subTabInterface, userData?: { name?: string }) => {
 	const { name, orderIndex, tabId } = data;
 
 	if (!name || orderIndex === undefined || !tabId) {
@@ -23,6 +23,15 @@ export const createSubTab = asyncHandler(async (data: subTabInterface) => {
 			name,
 			orderIndex,
 			tabId
+		}
+	});
+
+	await prisma.auditLog.create({
+		data: {
+			policyEngineId: existingTab.policyEngineId,
+			action: "UPDATED",
+			details: `SubTab created: ${name}`,
+			performedBy: userData?.name || "SYSTEM",
 		}
 	});
 
@@ -71,13 +80,14 @@ export const getSubTabsByTabId = asyncHandler(async (tabId: string) => {
 	return subTabs;
 });
 
-export const updateSubTab = asyncHandler(async (id: string, data: Partial<subTabInterface>) => {
+export const updateSubTab = asyncHandler(async (id: string, data: Partial<subTabInterface>, userData?: { name?: string }) => {
 	if (!id) {
 		throw new ApiError(400, "SubTab Id is required");
 	}
 
 	const existingSubTab = await prisma.subTab.findUnique({
-		where: { id }
+		where: { id },
+		include: { tab: true }
 	});
 
 	if (!existingSubTab) {
@@ -91,6 +101,10 @@ export const updateSubTab = asyncHandler(async (id: string, data: Partial<subTab
 	const filteredData = Object.fromEntries(
 		Object.entries(data).filter(([, value]) => value !== null && value !== undefined)
 	);
+
+	if (Object.keys(filteredData).length === 0) {
+		return existingSubTab;
+	}
 
 	if (filteredData.tabId) {
 		const existingTab = await prisma.tab.findUnique({
@@ -109,16 +123,26 @@ export const updateSubTab = asyncHandler(async (id: string, data: Partial<subTab
 		}
 	});
 
+	await prisma.auditLog.create({
+		data: {
+			policyEngineId: existingSubTab.tab.policyEngineId,
+			action: "UPDATED",
+			details: `SubTab updated: ${existingSubTab.name}. Fields: ${Object.keys(filteredData).join(", ")}`,
+			performedBy: userData?.name || "SYSTEM",
+		}
+	});
+
 	return updatedSubTab;
 });
 
-export const deleteSubTab = asyncHandler(async (id: string) => {
+export const deleteSubTab = asyncHandler(async (id: string, userData?: { name?: string }) => {
 	if (!id) {
 		throw new ApiError(400, "SubTab Id is required");
 	}
 
 	const existingSubTab = await prisma.subTab.findUnique({
-		where: { id }
+		where: { id },
+		include: { tab: true }
 	});
 
 	if (!existingSubTab) {
@@ -127,6 +151,15 @@ export const deleteSubTab = asyncHandler(async (id: string) => {
 
 	await prisma.subTab.delete({
 		where: { id }
+	});
+
+	await prisma.auditLog.create({
+		data: {
+			policyEngineId: existingSubTab.tab.policyEngineId,
+			action: "UPDATED",
+			details: `SubTab deleted: ${existingSubTab.name}`,
+			performedBy: userData?.name || "SYSTEM",
+		}
 	});
 
 	return { message: "SubTab deleted successfully" };

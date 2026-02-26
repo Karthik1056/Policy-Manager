@@ -41,6 +41,7 @@ export interface TabInterface{
     id:string;
     name:string;
     orderIndex:number;
+    documentNotes?:string | null;
     policyEngineId:string;
 }
 
@@ -48,6 +49,7 @@ export interface subTabInterface{
     id : string;
     name: string;
     orderIndex : number;
+    documentNotes?: string | null;
     tabId : string;
 }
 

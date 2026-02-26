@@ -12,7 +12,13 @@ export async function POST(req: NextRequest) {
             new ApiResponse(201, "User registered successfully", user, true),
             { status: 201 }
         );
-    } catch (error: any) {
+    } catch (error: unknown) {
+        if (error instanceof ApiError) {
+            return NextResponse.json(
+                new ApiResponse(error.statusCode, error.message, "", false),
+                { status: error.statusCode }
+            );
+        }
         return NextResponse.json(
             new ApiResponse(500,"Internal server error","",false),
             {status:500}

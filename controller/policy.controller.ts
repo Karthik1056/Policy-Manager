@@ -2,12 +2,15 @@ import { PolicyInterface } from "@/interface/interface"
 import { prisma } from "@/lib/prisma"
 import { ApiError } from "@/utils/ApiError"
 import asyncHandler from "@/utils/AsyncHandlerService";
+import { createPolicySnapshot } from "./snapshot.controller";
 
 export const createPolicy = asyncHandler(async (data: PolicyInterface, userData) => {
-    const { name, product, status, description, version } = data;
+    const { name, product, description } = data;
+    const status = data.status || "DRAFT";
+    const version = data.version || "v1.0";
 
-    if (!name || !product || !status) {
-        throw new ApiError(400, "All fields are required");
+    if (!name || !product) {
+        throw new ApiError(400, "Name and product are required");
     }
 
     const policy = await prisma.policyEngine.create({
@@ -41,23 +44,25 @@ export const updatePolicyById = asyncHandler(async (
     const existingPolicy = await prisma.policyEngine.findUnique({ where: { id } });
     if (!existingPolicy) throw new ApiError(404, "Policy not found");
 
-    if (data.version && data.version !== existingPolicy.version) {
-        const fullPolicy = await getPolicyById(id); 
-
-        await prisma.policyVersion.create({
-            data: {
-                versionNumber: existingPolicy.version,
-                policyEngineId: id,
-                snapshotData: fullPolicy as any
-            }
-        });
-    }
-
     const filteredData = Object.fromEntries(
         Object.entries(data).filter(([key, value]) =>
             value !== undefined && !["id", "createdAt", "updatedAt"].includes(key)
         )
     );
+
+    if (Object.keys(filteredData).length === 0) {
+        return existingPolicy;
+    }
+
+    const incomingVersion = typeof filteredData.version === "string" ? filteredData.version : undefined;
+    if (incomingVersion && incomingVersion !== existingPolicy.version) {
+        await createPolicySnapshot(
+            id,
+            `version change ${existingPolicy.version} -> ${incomingVersion}`,
+            userData,
+            { versionNumber: existingPolicy.version }
+        );
+    }
 
     const updatedPolicy = await prisma.policyEngine.update({
         where: { id },
