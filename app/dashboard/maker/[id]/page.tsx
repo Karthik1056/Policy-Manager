@@ -7,12 +7,29 @@ import { RootState } from "@/store";
 import { ArrowLeft, Save, History, ChevronDown, ChevronUp, ToggleLeft, ToggleRight } from "lucide-react";
 import TabList from "@/components/policy-builder/TabList";
 import SubTabSection from "@/components/policy-builder/SubTabSection";
-import AIGeneratePolicy from "@/components/policy-builder/AIGeneratePolicy";
 import { useQuery } from "@tanstack/react-query";
 import api from "@/lib/api";
 import { unwrapApiData } from "@/lib/unwrapApiData";
 import type { Tab } from "@/types";
 import toast from "react-hot-toast";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Textarea } from "@/components/ui/textarea";
+import { Label } from "@/components/ui/label";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Badge } from "@/components/ui/badge";
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 
 export default function PolicyBuilderPage() {
   const params = useParams();
@@ -24,6 +41,7 @@ export default function PolicyBuilderPage() {
   const [showPolicyUpdate, setShowPolicyUpdate] = useState(false);
   const [isPolicyInfoOpen, setIsPolicyInfoOpen] = useState(false);
   const [policy, setPolicy] = useState<any>(null);
+  const [checkers, setCheckers] = useState<any[]>([]);
   const [versionChangeEnabled, setVersionChangeEnabled] = useState(false);
   const [newVersion, setNewVersion] = useState("");
   const [versionChangeNote, setVersionChangeNote] = useState("");
@@ -36,7 +54,14 @@ export default function PolicyBuilderPage() {
     status: "DRAFT",
     version: "",
     description: "",
+    checkerId: "",
   });
+
+  useEffect(() => {
+    fetch("/api/users/get?role=CHECKER")
+      .then((res) => res.json())
+      .then((data) => setCheckers(data.data || []));
+  }, []);
 
   useEffect(() => {
     if (params && params.id) {
@@ -51,6 +76,7 @@ export default function PolicyBuilderPage() {
             status: policyData.status || "DRAFT",
             version: policyData.version || "",
             description: policyData.description || "",
+            checkerId: policyData.checkerId || "",
           });
         });
     }
@@ -98,43 +124,6 @@ export default function PolicyBuilderPage() {
     }
   };
 
-  const handleAIGenerated = async (structure: any) => {
-    const loadingToast = toast.loading("Creating policy structure...");
-    try {
-      for (const tab of structure.tabs) {
-        const tabRes = await api.post("/tab/createTab", {
-          name: tab.name,
-          documentNotes: tab.documentNotes,
-          policyEngineId: params?.id,
-          orderIndex: structure.tabs.indexOf(tab)
-        });
-        const tabData = unwrapApiData(tabRes.data);
-        
-        for (const subTab of tab.subTabs) {
-          const subTabRes = await api.post("/subtab/create", {
-            name: subTab.name,
-            documentNotes: subTab.documentNotes,
-            tabId: tabData.id,
-            orderIndex: tab.subTabs.indexOf(subTab)
-          });
-          const subTabData = unwrapApiData(subTabRes.data);
-          
-          for (const field of subTab.fields) {
-            await api.post("/field/create", {
-              ...field,
-              subTabId: subTabData.id,
-              orderIndex: subTab.fields.indexOf(field)
-            });
-          }
-        }
-      }
-      toast.success("Policy structure created!", { id: loadingToast });
-      window.location.reload();
-    } catch (error) {
-      toast.error("Failed to create structure", { id: loadingToast });
-    }
-  };
-
   const handleSavePolicy = async () => {
     const loadingToast = toast.loading("Updating policy...");
     try {
@@ -155,227 +144,249 @@ export default function PolicyBuilderPage() {
     <div className="min-h-screen bg-gray-50">
       <div className="bg-white border-b px-8 py-4">
         <div className="flex items-center justify-between">
-          <button onClick={() => router.back()} className="flex items-center gap-2 text-gray-600 hover:text-gray-900">
-            <ArrowLeft size={20} />
+          <Button variant="ghost" onClick={() => router.back()}>
+            <ArrowLeft size={20} className="mr-2" />
             Back
-          </button>
+          </Button>
           <div className="flex gap-3">
             {isChecker && (
-              <button
-                onClick={() => setShowPolicyUpdate(!showPolicyUpdate)}
-                className="px-4 py-2 border rounded-lg flex items-center gap-2 hover:bg-gray-50"
-              >
-                <History size={16} />
+              <Button variant="outline" onClick={() => setShowPolicyUpdate(!showPolicyUpdate)}>
+                <History size={16} className="mr-2" />
                 {showPolicyUpdate ? "Hide" : "Show"} Updates
-              </button>
+              </Button>
             )}
-            <button onClick={handleSavePolicy} className="px-4 py-2 bg-blue-600 text-white rounded-lg flex items-center gap-2 hover:bg-blue-700" disabled={!canEdit}>
-              <Save size={16} />
+            <Button onClick={handleSavePolicy} disabled={!canEdit}>
+              <Save size={16} className="mr-2" />
               Save Policy
-            </button>
+            </Button>
           </div>
         </div>
       </div>
 
       <div className="p-8 max-w-7xl mx-auto space-y-6">
         {!isPublished && (
-          <div className="bg-blue-50 border border-blue-200 rounded-xl p-4">
-            <div className="flex items-center gap-4 mb-3">
-              <button
-                onClick={handleVersionToggle}
-                className="flex items-center gap-2 cursor-pointer hover:opacity-80"
-                disabled={!versionChangeEnabled && !versionChangeNote.trim()}
-              >
-                {versionChangeEnabled ? (
-                  <ToggleRight size={32} className="text-blue-600" />
-                ) : (
-                  <ToggleLeft size={32} className="text-gray-400" />
+          <Card className="bg-blue-50 border-blue-200">
+            <CardContent className="p-4">
+              <div className="flex items-center gap-4 mb-3">
+                <Button
+                  variant="ghost"
+                  onClick={handleVersionToggle}
+                  disabled={!versionChangeEnabled && !versionChangeNote.trim()}
+                  className="p-0 h-auto hover:bg-transparent"
+                >
+                  {versionChangeEnabled ? (
+                    <ToggleRight size={32} className="text-blue-600" />
+                  ) : (
+                    <ToggleLeft size={32} className="text-gray-400" />
+                  )}
+                  <span className="text-sm font-medium text-blue-900 ml-2">Change Version</span>
+                </Button>
+                {versionChangeEnabled && (
+                  <div className="flex items-center gap-2">
+                    <span className="text-sm text-blue-700">New Version:</span>
+                    <Input
+                      type="text"
+                      value={newVersion}
+                      onChange={(e) => setNewVersion(e.target.value)}
+                      placeholder="e.g., 1.1"
+                      className="w-32"
+                    />
+                  </div>
                 )}
-                <span className="text-sm font-medium text-blue-900">Change Version</span>
-              </button>
-              {versionChangeEnabled && (
-                <div className="flex items-center gap-2">
-                  <span className="text-sm text-blue-700">New Version:</span>
-                  <input
-                    type="text"
-                    value={newVersion}
-                    onChange={(e) => setNewVersion(e.target.value)}
-                    placeholder="e.g., 1.1"
-                    className="px-3 py-2 border rounded text-sm text-gray-900 w-32"
+                <Badge variant="secondary" className="ml-auto">Current: v{policy?.version}</Badge>
+              </div>
+              {!versionChangeEnabled && (
+                <div className="mb-2">
+                  <Label htmlFor="versionNote" className="text-blue-900">Version Change Note (Required)</Label>
+                  <Textarea
+                    id="versionNote"
+                    value={versionChangeNote}
+                    onChange={(e) => setVersionChangeNote(e.target.value)}
+                    placeholder="Describe what changes you're making in this version..."
+                    rows={2}
                   />
                 </div>
               )}
-              <span className="text-xs text-blue-700 ml-auto">Current: v{policy?.version}</span>
-            </div>
-            {!versionChangeEnabled && (
-              <div className="mb-2">
-                <label className="block text-sm font-medium text-blue-900 mb-1">Version Change Note (Required)</label>
-                <textarea
-                  value={versionChangeNote}
-                  onChange={(e) => setVersionChangeNote(e.target.value)}
-                  placeholder="Describe what changes you're making in this version..."
-                  className="w-full px-3 py-2 border rounded text-sm text-gray-900"
-                  rows={2}
-                />
-              </div>
-            )}
-            {versionChangeEnabled && (
-              <div className="space-y-2">
-                <p className="text-xs text-blue-700">✓ Previous version snapshot saved. Enter new version number and save your changes.</p>
-                <div className="bg-white p-2 rounded border">
-                  <p className="text-xs font-medium text-gray-700">Change Note:</p>
-                  <p className="text-xs text-gray-600">{versionChangeNote}</p>
+              {versionChangeEnabled && (
+                <div className="space-y-2">
+                  <p className="text-xs text-blue-700">✓ Previous version snapshot saved. Enter new version number and save your changes.</p>
+                  <Card>
+                    <CardContent className="p-2">
+                      <p className="text-xs font-medium text-gray-700">Change Note:</p>
+                      <p className="text-xs text-gray-600">{versionChangeNote}</p>
+                    </CardContent>
+                  </Card>
                 </div>
-              </div>
-            )}
-          </div>
+              )}
+            </CardContent>
+          </Card>
         )}
         {showPolicyUpdate && isChecker && policy && (
-          <div className="bg-purple-50 border border-purple-200 rounded-xl p-6">
-            <h2 className="text-lg font-semibold mb-4 text-purple-900">Policy Update History</h2>
-            <div className="bg-white p-4 rounded-lg border">
-              <div className="flex justify-between items-start">
-                <div>
-                  <p className="font-medium text-gray-900">Version {policy.version}</p>
-                  <p className="text-sm text-gray-600">Updated: {new Date(policy.updatedAt).toLocaleString()}</p>
-                </div>
-                <span className="px-3 py-1 bg-purple-100 text-purple-700 text-xs font-semibold rounded-full">
-                  {policy.status}
-                </span>
-              </div>
-            </div>
-          </div>
+          <Card className="bg-purple-50 border-purple-200">
+            <CardHeader>
+              <CardTitle className="text-lg text-purple-900">Policy Update History</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <Card>
+                <CardContent className="p-4">
+                  <div className="flex justify-between items-start">
+                    <div>
+                      <p className="font-medium text-gray-900">Version {policy.version}</p>
+                      <p className="text-sm text-gray-600">Updated: {new Date(policy.updatedAt).toLocaleString()}</p>
+                    </div>
+                    <Badge variant="outline" className="bg-purple-100 text-purple-700">
+                      {policy.status}
+                    </Badge>
+                  </div>
+                </CardContent>
+              </Card>
+            </CardContent>
+          </Card>
         )}
 
         {isPublished && (
-          <div className="bg-yellow-50 border border-yellow-200 rounded-xl p-4">
-            <p className="text-yellow-800 text-sm font-medium">This policy is published and cannot be edited.</p>
-          </div>
+          <Card className="bg-yellow-50 border-yellow-200">
+            <CardContent className="p-4">
+              <p className="text-yellow-800 text-sm font-medium">This policy is published and cannot be edited.</p>
+            </CardContent>
+          </Card>
         )}
 
-        <div className="bg-white rounded-xl border shadow-sm">
-          <div 
-            className="flex items-center justify-between p-6 cursor-pointer hover:bg-gray-50"
+        <Card>
+          <CardHeader 
+            className="cursor-pointer hover:bg-gray-50"
             onClick={() => setIsPolicyInfoOpen(!isPolicyInfoOpen)}
           >
-            <h2 className="text-xl font-bold text-gray-900">Policy Information</h2>
-            {isPolicyInfoOpen ? <ChevronUp size={20} /> : <ChevronDown size={20} />}
-          </div>
+            <div className="flex items-center justify-between">
+              <CardTitle>Policy Information</CardTitle>
+              {isPolicyInfoOpen ? <ChevronUp size={20} /> : <ChevronDown size={20} />}
+            </div>
+          </CardHeader>
           {isPolicyInfoOpen && (
-            <div className="px-6 pb-6 border-t">
+            <CardContent className="border-t">
               <div className="grid grid-cols-2 gap-4 pt-4">
-                <div>
-                  <label className="block text-sm font-medium mb-2 text-gray-700">Policy Name</label>
-                  <input
+                <div className="space-y-2">
+                  <Label htmlFor="policyName">Policy Name</Label>
+                  <Input
+                    id="policyName"
                     type="text"
                     value={formData.name}
                     onChange={(e) => setFormData({ ...formData, name: e.target.value })}
-                    className="w-full px-3 py-2 border rounded-md text-gray-900"
                     disabled={!canEdit}
                   />
                 </div>
-                <div>
-                  <label className="block text-sm font-medium mb-2 text-gray-700">Product</label>
-                  <input
+                <div className="space-y-2">
+                  <Label htmlFor="product">Product</Label>
+                  <Input
+                    id="product"
                     type="text"
                     value={formData.product}
                     onChange={(e) => setFormData({ ...formData, product: e.target.value })}
-                    className="w-full px-3 py-2 border rounded-md text-gray-900"
                     disabled={!canEdit}
                   />
                 </div>
-                <div>
-                  <label className="block text-sm font-medium mb-2 text-gray-700">Version</label>
-                  <input
+                <div className="space-y-2">
+                  <Label htmlFor="version">Version</Label>
+                  <Input
+                    id="version"
                     type="text"
                     value={formData.version}
                     onChange={(e) => setFormData({ ...formData, version: e.target.value })}
-                    className="w-full px-3 py-2 border rounded-md text-gray-900"
                     disabled={!canEdit}
                   />
                 </div>
-                <div>
-                  <label className="block text-sm font-medium mb-2 text-gray-700">Status</label>
-                  <select
-                    value={formData.status}
-                    onChange={(e) => setFormData({ ...formData, status: e.target.value })}
-                    className="w-full px-3 py-2 border rounded-md text-gray-900"
-                    disabled={!canEdit}
-                  >
-                    <option value="DRAFT">DRAFT</option>
-                    <option value="IN_REVIEW">IN_REVIEW</option>
-                    <option value="PUBLISHED">PUBLISHED</option>
-                  </select>
+                <div className="space-y-2">
+                  <Label htmlFor="status">Status</Label>
+                  <Select value={formData.status} onValueChange={(value) => setFormData({ ...formData, status: value })} disabled={!canEdit}>
+                    <SelectTrigger id="status">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="DRAFT">DRAFT</SelectItem>
+                      <SelectItem value="IN_REVIEW">IN_REVIEW</SelectItem>
+                      <SelectItem value="PUBLISHED">PUBLISHED</SelectItem>
+                    </SelectContent>
+                  </Select>
                 </div>
-                <div className="col-span-2">
-                  <label className="block text-sm font-medium mb-2 text-gray-700">Description</label>
-                  <textarea
+                <div className="col-span-2 space-y-2">
+                  <Label htmlFor="description">Description</Label>
+                  <Textarea
+                    id="description"
                     value={formData.description}
                     onChange={(e) => setFormData({ ...formData, description: e.target.value })}
-                    className="w-full px-3 py-2 border rounded-md text-gray-900"
                     rows={3}
                     disabled={!canEdit}
                   />
                 </div>
+                <div className="col-span-2 space-y-2">
+                  <Label htmlFor="checker">Assign Checker</Label>
+                  <Select value={formData.checkerId} onValueChange={(value) => setFormData({ ...formData, checkerId: value })} disabled={!canEdit}>
+                    <SelectTrigger id="checker">
+                      <SelectValue placeholder="Select checker" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {checkers.map((checker) => (
+                        <SelectItem key={checker.id} value={checker.id}>
+                          {checker.name}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
               </div>
-            </div>
+            </CardContent>
           )}
-        </div>
+        </Card>
 
-        <div className="bg-white rounded-xl border shadow-sm p-6">
-          <div className="flex items-center justify-between mb-4">
-            <h2 className="text-xl font-bold text-gray-900">Policy Rules</h2>
-            {canEdit && tabs.length === 0 && (
-              <AIGeneratePolicy onGenerated={handleAIGenerated} />
-            )}
-          </div>
-          {canEdit ? (
-            <>
-              <TabList
-                tabs={tabs}
-                activeId={activeTabId}
-                onSelect={setActiveTabId}
-                policyId={params?.id as string}
-              />
-              <div className="mt-6">
-                {activeTabId && <SubTabSection tabId={activeTabId} />}
-              </div>
-            </>
-          ) : (
-            <div className="text-center py-8 text-gray-500">
-              <p>This policy is published and cannot be edited.</p>
+        <Card>
+          <CardHeader>
+            <div className="flex items-center justify-between">
+              <CardTitle>Policy Rules</CardTitle>
             </div>
-          )}
-        </div>
+          </CardHeader>
+          <CardContent>
+            {canEdit ? (
+              <>
+                <TabList
+                  tabs={tabs}
+                  activeId={activeTabId}
+                  onSelect={setActiveTabId}
+                  policyId={params?.id as string}
+                />
+                <div className="mt-6">
+                  {activeTabId && <SubTabSection tabId={activeTabId} />}
+                </div>
+              </>
+            ) : (
+              <div className="text-center py-8 text-gray-500">
+                <p>This policy is published and cannot be edited.</p>
+              </div>
+            )}
+          </CardContent>
+        </Card>
       </div>
 
       {showConfirmModal && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50" onClick={() => setShowConfirmModal(false)}>
-          <div className="bg-white rounded-xl p-6 w-full max-w-md shadow-2xl" onClick={(e) => e.stopPropagation()}>
-            <h3 className="text-lg font-semibold text-gray-900 mb-4">Confirm Version Change</h3>
-            <p className="text-sm text-gray-600 mb-4">
-              This will save the current version (v{policy?.version}) as a snapshot. You can then make changes and save with a new version number.
-            </p>
-            <div className="bg-blue-50 p-3 rounded mb-4">
-              <p className="text-xs font-medium text-gray-700 mb-1">Change Note:</p>
-              <p className="text-sm text-gray-900">{versionChangeNote}</p>
-            </div>
-            <div className="flex gap-3">
-              <button
-                onClick={confirmVersionChange}
-                className="flex-1 rounded-lg bg-blue-600 px-4 py-2 text-sm font-semibold text-white hover:bg-blue-700"
-              >
-                Confirm
-              </button>
-              <button
-                onClick={() => setShowConfirmModal(false)}
-                className="flex-1 rounded-lg border px-4 py-2 text-sm font-semibold text-gray-700 hover:bg-gray-50"
-              >
-                Cancel
-              </button>
-            </div>
-          </div>
-        </div>
+        <AlertDialog open={showConfirmModal} onOpenChange={setShowConfirmModal}>
+          <AlertDialogContent>
+            <AlertDialogHeader>
+              <AlertDialogTitle>Confirm Version Change</AlertDialogTitle>
+              <AlertDialogDescription>
+                This will save the current version (v{policy?.version}) as a snapshot. You can then make changes and save with a new version number.
+              </AlertDialogDescription>
+            </AlertDialogHeader>
+            <Card className="bg-blue-50">
+              <CardContent className="p-3">
+                <p className="text-xs font-medium text-gray-700 mb-1">Change Note:</p>
+                <p className="text-sm text-gray-900">{versionChangeNote}</p>
+              </CardContent>
+            </Card>
+            <AlertDialogFooter>
+              <AlertDialogCancel>Cancel</AlertDialogCancel>
+              <AlertDialogAction onClick={confirmVersionChange}>Confirm</AlertDialogAction>
+            </AlertDialogFooter>
+          </AlertDialogContent>
+        </AlertDialog>
       )}
     </div>
   );

@@ -3,6 +3,16 @@
 import { useState, useEffect } from "react";
 import { useParams, useRouter } from "next/navigation";
 import { ArrowLeft, FileText, Printer, Code } from "lucide-react";
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from "@/components/ui/table";
+import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
 
 export default function PolicyVersionsPage() {
   const params = useParams();
@@ -92,32 +102,32 @@ export default function PolicyVersionsPage() {
     <div className="min-h-screen bg-gray-50">
       <div className="bg-white border-b px-8 py-4">
         <div className="flex items-center gap-4 mb-4">
-          <button onClick={() => router.back()} className="p-2 hover:bg-gray-100 rounded">
+          <Button variant="ghost" size="icon" onClick={() => router.back()}>
             <ArrowLeft size={20} />
-          </button>
+          </Button>
           <div className="flex-1">
             <div className="text-sm text-gray-500 mb-1">
               Policies / {policy?.product} / Policy #{policy?.id?.slice(0, 8)}
             </div>
             <h1 className="text-3xl font-bold text-gray-900">{policy?.name} v{policy?.version}</h1>
           </div>
-          <button className="px-4 py-2 border rounded-lg text-sm flex items-center gap-2 hover:bg-gray-50">
-            <Printer size={16} />
+          <Button variant="outline" size="sm">
+            <Printer size={16} className="mr-2" />
             Print Summary
-          </button>
-          <button className="px-4 py-2 border rounded-lg text-sm flex items-center gap-2 hover:bg-gray-50">
-            <Code size={16} />
+          </Button>
+          <Button variant="outline" size="sm">
+            <Code size={16} className="mr-2" />
             View JSON
-          </button>
+          </Button>
         </div>
         <div className="flex items-center gap-4 text-sm text-gray-600">
-          <span className={`px-3 py-1 rounded-full text-xs font-medium ${
-            policy?.status === "IN_REVIEW" ? "bg-blue-100 text-blue-700" :
-            policy?.status === "PUBLISHED" ? "bg-green-100 text-green-700" :
-            "bg-gray-100 text-gray-700"
-          }`}>
+          <Badge variant={
+            policy?.status === "IN_REVIEW" ? "outline" :
+            policy?.status === "PUBLISHED" ? "default" :
+            "secondary"
+          }>
             {policy?.status === "IN_REVIEW" ? "Pending Review" : policy?.status}
-          </span>
+          </Badge>
           <span>Last modified by {policy?.maker?.name}</span>
           <span>Updated {new Date(policy?.updatedAt).toLocaleString()}</span>
         </div>
@@ -189,34 +199,34 @@ export default function PolicyVersionsPage() {
             </div>
             
             <div className="border rounded-lg overflow-hidden">
-              <table className="w-full text-sm font-mono">
-                <thead className="bg-gray-50 border-b">
-                  <tr>
-                    <th className="px-4 py-2 text-left text-xs font-semibold text-gray-500 w-12">LN</th>
-                    <th className="px-4 py-2 text-left text-xs font-semibold text-gray-500">CONTENT</th>
-                  </tr>
-                </thead>
-                <tbody>
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead className="w-12">LN</TableHead>
+                    <TableHead>CONTENT</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
                   {diff.map((item, idx) => (
-                    <tr key={idx} className={`border-b ${
+                    <TableRow key={idx} className={`${
                       item.type === "removed" ? "bg-red-50" :
                       item.type === "added" ? "bg-green-50" :
                       ""
                     }`}>
-                      <td className="px-4 py-2 text-gray-900">
+                      <TableCell className="text-gray-900 font-mono">
                         {item.type === "removed" ? "-" : item.type === "added" ? "+" : idx + 1}
-                      </td>
-                      <td className={`px-4 py-2 pl-12 ${
+                      </TableCell>
+                      <TableCell className={`pl-12 font-mono ${
                         item.type === "removed" ? "text-red-700" :
                         item.type === "added" ? "text-green-700" :
                         "text-gray-900"
                       }`}>
                         {item.content}
-                      </td>
-                    </tr>
+                      </TableCell>
+                    </TableRow>
                   ))}
-                </tbody>
-              </table>
+                </TableBody>
+              </Table>
             </div>
             <div className="mt-4 text-xs text-gray-500 text-center">
               End of file. {diff.filter(d => d.type === "added").length} additions, {diff.filter(d => d.type === "removed").length} deletions.

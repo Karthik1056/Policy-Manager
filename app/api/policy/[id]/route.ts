@@ -1,6 +1,7 @@
 import { deletePolicyById, getPolicyById, updatePolicyById } from "@/controller/policy.controller";
 import { ApiResponse } from "@/utils/ApiResponce";
 import { NextRequest,NextResponse } from "next/server";
+import { assertMakerForPolicyEdit, getUserFromRequest } from "@/lib/adminAuth";
 
 export async function GET(
     _req: NextRequest,
@@ -37,8 +38,8 @@ export async function PATCH(
 ) {
     try {
         const { id } = await params;
-        const userDataHeader = req.headers.get("x-user-data");
-        const userData = userDataHeader ? JSON.parse(userDataHeader) : undefined;
+        const userData = getUserFromRequest(req);
+        assertMakerForPolicyEdit(userData.role);
 
         const body = await req.json();
 
@@ -59,18 +60,10 @@ export async function PATCH(
 export async function DELETE(req:NextRequest,{params}:{params: Promise<{id:string}>}) {
     try {
         const {id} = await params;
+        const userData = getUserFromRequest(req);
+        assertMakerForPolicyEdit(userData.role);
 
-
-        const userData = req.headers.get("x-user-data");
-
-        if (!userData) {
-            return NextResponse.json(
-                { success: false, message: "User data is missing" },
-                { status: 400 }
-            );
-        }
-
-         await  deletePolicyById(id,JSON.parse(userData));
+         await  deletePolicyById(id, userData);
 
 
         return NextResponse.json(

@@ -1,6 +1,7 @@
 import { deleteSubTab, updateSubTab } from "@/controller/subtab.controller";
 import { ApiResponse } from "@/utils/ApiResponce";
 import { NextRequest, NextResponse } from "next/server";
+import { assertMakerForPolicyEdit, getUserFromRequest } from "@/lib/adminAuth";
 
 export async function PATCH(
     req: NextRequest,
@@ -8,8 +9,8 @@ export async function PATCH(
 ) {
     try {
         const { id } = await params;
-        const userDataHeader = req.headers.get("x-user-data");
-        const userData = userDataHeader ? JSON.parse(userDataHeader) : undefined;
+        const userData = getUserFromRequest(req);
+        assertMakerForPolicyEdit(userData.role);
 
         if (!id) {
             return NextResponse.json(
@@ -40,8 +41,8 @@ export async function DELETE(
 ) {
     try {
         const { id } = await params;
-        const userDataHeader = req.headers.get("x-user-data");
-        const userData = userDataHeader ? JSON.parse(userDataHeader) : undefined;
+        const userData = getUserFromRequest(req);
+        assertMakerForPolicyEdit(userData.role);
 
         if (!id) {
             return NextResponse.json(

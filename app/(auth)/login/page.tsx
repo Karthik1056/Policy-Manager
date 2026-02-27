@@ -11,11 +11,10 @@ import api from "@/lib/api";
 import { setCredentials, type AuthUser } from "@/store/slices/authSlice";
 import { useAppDispatch } from "@/store/hooks";
 
-// 1. Validation Schema
 const loginSchema = z.object({
   email: z.string().email("Please enter a valid email"),
   password: z.string().min(6, "Password must be at least 6 characters"),
-  role: z.enum(["maker", "checker"], {
+  role: z.enum(["MAKER", "CHECKER", "ADMIN", "IT_ADMIN"], {
     message: "Please select a valid role",
   }),
 });
@@ -34,7 +33,6 @@ export default function LoginPage() {
   const dispatch = useAppDispatch();
   const router = useRouter();
 
-  // 2. Initialize Hook Form
   const {
     register,
     handleSubmit,
@@ -42,16 +40,15 @@ export default function LoginPage() {
   } = useForm<LoginFormValues>({
     resolver: zodResolver(loginSchema),
     defaultValues: {
-      role: "maker",
+      role: "MAKER",
     },
   });
 
-  // 3. Form Submission
   const onSubmit = async (data: LoginFormValues) => {
     const loadingToast = toast.loading("Verifying credentials...");
     try {
       const response = await api.post("/users/login", data);
-      
+
       const body = response.data as unknown;
       const payload = (body && typeof body === "object" && "data" in body ? (body as { data: unknown }).data : body) as unknown;
       const user =
@@ -70,11 +67,13 @@ export default function LoginPage() {
 
       toast.success("Login successful!", { id: loadingToast });
 
-      // Role-based redirection
-      if (user.role === "maker") {
-        router.push("/dashboard");
-      } else {
+      const normalizedRole = String(user.role || "").toUpperCase();
+      if (normalizedRole === "CHECKER") {
         router.push("/dashboard/checker/queue");
+      } else if (["ADMIN", "IT_ADMIN"].includes(normalizedRole)) {
+        router.push("/dashboard/admin");
+      } else {
+        router.push("/dashboard");
       }
     } catch (error: unknown) {
       toast.error(getErrorMessage(error), { id: loadingToast });
@@ -95,7 +94,6 @@ export default function LoginPage() {
 
         <form className="mt-8 space-y-6" onSubmit={handleSubmit(onSubmit)}>
           <div className="rounded-md shadow-sm space-y-4">
-            {/* Email Field */}
             <div>
               <label htmlFor="email" className="block text-sm font-medium text-gray-700">
                 Email Address
@@ -113,7 +111,6 @@ export default function LoginPage() {
               )}
             </div>
 
-            {/* Password Field */}
             <div>
               <label htmlFor="password" className="block text-sm font-medium text-gray-700">
                 Password
@@ -124,14 +121,13 @@ export default function LoginPage() {
                 className={`appearance-none relative block w-full px-3 py-2 border ${
                   errors.password ? "border-red-500" : "border-gray-300"
                 } placeholder-gray-500 text-gray-900 rounded-md focus:outline-none focus:ring-blue-500 focus:border-blue-500 focus:z-10 sm:text-sm`}
-                placeholder="••••••••"
+                placeholder="********"
               />
               {errors.password && (
                 <p className="mt-1 text-xs text-red-500">{errors.password.message}</p>
               )}
             </div>
 
-            {/* Role Selector */}
             <div>
               <label htmlFor="role" className="block text-sm font-medium text-gray-700">
                 Login As
@@ -140,8 +136,10 @@ export default function LoginPage() {
                 {...register("role")}
                 className="mt-1 block w-full pl-3 pr-10 py-2 text-base border-gray-300 focus:outline-none focus:ring-blue-500 focus:border-blue-500 sm:text-sm rounded-md"
               >
-                <option value="maker">Maker (Editor)</option>
-                <option value="checker">Checker (Reviewer)</option>
+                <option value="MAKER">Maker (Editor)</option>
+                <option value="CHECKER">Checker (Reviewer)</option>
+                <option value="ADMIN">Admin</option>
+                <option value="IT_ADMIN">IT Admin</option>
               </select>
               {errors.role && (
                 <p className="mt-1 text-xs text-red-500">{errors.role.message}</p>

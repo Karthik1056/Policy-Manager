@@ -3,7 +3,10 @@ import type { NextRequest } from "next/server";
 import * as jose from "jose"; 
 
 export async function proxy(request: NextRequest) {
-    const token = request.cookies.get('accessToken')?.value;
+    const cookieToken = request.cookies.get('accessToken')?.value;
+    const authHeader = request.headers.get("authorization") || request.headers.get("Authorization");
+    const bearerToken = authHeader?.startsWith("Bearer ") ? authHeader.slice(7).trim() : undefined;
+    const token = cookieToken || bearerToken;
 
     if (!token) {
         return NextResponse.json(

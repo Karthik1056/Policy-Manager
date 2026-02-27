@@ -6,11 +6,75 @@ import api from "@/lib/api";
 import toast from "react-hot-toast";
 import type { SubTab } from "@/types";
 import { unwrapApiData } from "@/lib/unwrapApiData";
-import AddSubTabModal from "./AddSubTabModal";
-import AddFieldModal from "./AddFieldModal";
+import SubTabFormDrawer from "./SubTabFormDrawer";
+import FieldFormDrawer from "./FieldFormDrawer";
 import FieldRulesDisplay from "./FieldRulesDisplay";
 import DocumentPreview from "./DocumentPreview";
 import { Plus, Trash2, Edit2, Briefcase } from "lucide-react";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
+
+type LogicOperator = "AND" | "OR" | "XOR";
+
+type OutcomeConfig = {
+  thenAction: string;
+  elseAction: string;
+  thenCustom: string;
+  elseCustom: string;
+};
+
+const DEFAULT_OUTCOME: OutcomeConfig = {
+  thenAction: "APPROVE",
+  elseAction: "MANUAL_REVIEW",
+  thenCustom: "",
+  elseCustom: "",
+};
+
+function compareValue(field: any, rawInput: string): boolean {
+  const operator = field?.operator || "==";
+  const threshold = field?.thresholdValue ?? field?.fieldValues ?? "";
+
+  const inputNumber = Number(rawInput);
+  const thresholdNumber = Number(threshold);
+  const bothNumbers = Number.isFinite(inputNumber) && Number.isFinite(thresholdNumber) && rawInput !== "";
+
+  if (bothNumbers) {
+    if (operator === ">=") return inputNumber >= thresholdNumber;
+    if (operator === "<=") return inputNumber <= thresholdNumber;
+    if (operator === ">") return inputNumber > thresholdNumber;
+    if (operator === "<") return inputNumber < thresholdNumber;
+    if (operator === "!=") return inputNumber !== thresholdNumber;
+    return inputNumber === thresholdNumber;
+  }
+
+  const input = String(rawInput || "").trim().toLowerCase();
+  const target = String(threshold || "").trim().toLowerCase();
+
+  if (operator === "!=") return input !== target;
+  return input === target;
+}
+
+function evaluateChain(results: boolean[], operators: LogicOperator[]): boolean {
+  if (results.length === 0) return false;
+  let finalResult = results[0];
+
+  for (let i = 1; i < results.length; i += 1) {
+    const op = operators[i - 1] || "AND";
+    if (op === "AND") finalResult = finalResult && results[i];
+    if (op === "OR") finalResult = finalResult || results[i];
+    if (op === "XOR") finalResult = Boolean(finalResult) !== Boolean(results[i]);
+  }
+
+  return finalResult;
+}
 
 export default function SubTabSection({ tabId }: { tabId: string }) {
   const queryClient = useQueryClient();
@@ -19,8 +83,16 @@ export default function SubTabSection({ tabId }: { tabId: string }) {
   const [selectedSubTabId, setSelectedSubTabId] = useState<string | null>(null);
   const [editingSubTab, setEditingSubTab] = useState<SubTab | null>(null);
   const [editingField, setEditingField] = useState<any>(null);
-  const [fieldLogic, setFieldLogic] = useState<Record<string, "AND" | "OR">>({});
-  const [subTabLogic, setSubTabLogic] = useState<Record<string, "AND" | "OR">>({});
+  const [deleteSubTabId, setDeleteSubTabId] = useState<string | null>(null);
+  const [deleteFieldId, setDeleteFieldId] = useState<string | null>(null);
+
+  const [fieldLogic, setFieldLogic] = useState<Record<string, LogicOperator>>({});
+  const [subTabLogic, setSubTabLogic] = useState<Record<string, LogicOperator>>({});
+
+  const [advancedOpen, setAdvancedOpen] = useState<Record<string, boolean>>({});
+  const [outcomes, setOutcomes] = useState<Record<string, OutcomeConfig>>({});
+  const [testInputs, setTestInputs] = useState<Record<string, Record<string, string>>>({});
+  const [testResults, setTestResults] = useState<Record<string, { matched: boolean; decision: string; details: string }>>({});
 
   const { data: subTabs, isLoading } = useQuery({
     queryKey: ["subTabs", tabId],
@@ -103,17 +175,62 @@ export default function SubTabSection({ tabId }: { tabId: string }) {
     }
   };
 
-  const toggleFieldLogic = (key: string) => {
-    setFieldLogic((prev) => ({
+  const handleFieldLogicChange = (key: string, value: LogicOperator) => {
+    setFieldLogic((prev) => ({ ...prev, [key]: value }));
+  };
+
+  const handleSubTabLogicChange = (key: string, value: LogicOperator) => {
+    setSubTabLogic((prev) => ({ ...prev, [key]: value }));
+  };
+
+  const getOutcome = (subTabId: string): OutcomeConfig => outcomes[subTabId] || DEFAULT_OUTCOME;
+
+  const updateOutcome = (subTabId: string, patch: Partial<OutcomeConfig>) => {
+    setOutcomes((prev) => ({
       ...prev,
-      [key]: prev[key] === "OR" ? "AND" : "OR",
+      [subTabId]: { ...(prev[subTabId] || DEFAULT_OUTCOME), ...patch },
     }));
   };
 
-  const toggleSubTabLogic = (key: string) => {
-    setSubTabLogic((prev) => ({
+  const updateTestInput = (subTabId: string, fieldId: string, value: string) => {
+    setTestInputs((prev) => ({
       ...prev,
-      [key]: prev[key] === "OR" ? "AND" : "OR",
+      [subTabId]: {
+        ...(prev[subTabId] || {}),
+        [fieldId]: value,
+      },
+    }));
+  };
+
+  const runRuleTest = (subTab: any) => {
+    const fields = subTab?.fields || [];
+    if (!fields.length) {
+      toast.error("Add at least one field to test this rule group");
+      return;
+    }
+
+    const inputByField = testInputs[subTab.id] || {};
+    const checks = fields.map((field: any) => compareValue(field, inputByField[field.id] || ""));
+    const operators: LogicOperator[] = fields.slice(0, -1).map((_: any, idx: number) => {
+      const key = `${subTab.id}-field-${idx}`;
+      return fieldLogic[key] || "AND";
+    });
+
+    const matched = evaluateChain(checks, operators);
+    const outcome = getOutcome(subTab.id);
+
+    const thenDecision = outcome.thenAction === "CUSTOM" ? (outcome.thenCustom || "CUSTOM") : outcome.thenAction;
+    const elseDecision = outcome.elseAction === "CUSTOM" ? (outcome.elseCustom || "CUSTOM") : outcome.elseAction;
+
+    setTestResults((prev) => ({
+      ...prev,
+      [subTab.id]: {
+        matched,
+        decision: matched ? thenDecision : elseDecision,
+        details: matched
+          ? "Input satisfies IF conditions"
+          : "Input does not satisfy IF conditions",
+      },
     }));
   };
 
@@ -135,9 +252,11 @@ export default function SubTabSection({ tabId }: { tabId: string }) {
         </button>
       </div>
 
-      {subTabs?.map((subTab, subTabIndex) => {
+      {subTabs?.map((subTab: any, subTabIndex: number) => {
         const subTabLogicKey = `subtab-${subTabIndex}`;
         const currentSubTabLogic = subTabLogic[subTabLogicKey] || "AND";
+        const subOutcome = getOutcome(subTab.id);
+        const subResult = testResults[subTab.id];
 
         return (
           <div key={subTab.id}>
@@ -158,9 +277,7 @@ export default function SubTabSection({ tabId }: { tabId: string }) {
                     <Edit2 size={14} />
                   </button>
                   <button
-                    onClick={() => {
-                      if (confirm(`Delete "${subTab.name}"?`)) deleteSubTab(subTab.id);
-                    }}
+                    onClick={() => setDeleteSubTabId(subTab.id)}
                     className="p-1.5 hover:bg-white rounded text-red-600"
                   >
                     <Trash2 size={14} />
@@ -172,7 +289,7 @@ export default function SubTabSection({ tabId }: { tabId: string }) {
                 <DocumentPreview content={subTab.documentNotes} className="bg-blue-50 border-blue-200" />
               )}
 
-              {subTab.fields?.map((field, fieldIndex) => {
+              {subTab.fields?.map((field: any, fieldIndex: number) => {
                 const fieldLogicKey = `${subTab.id}-field-${fieldIndex}`;
                 const currentFieldLogic = fieldLogic[fieldLogicKey] || "AND";
 
@@ -198,9 +315,7 @@ export default function SubTabSection({ tabId }: { tabId: string }) {
                               <Edit2 size={12} />
                             </button>
                             <button
-                              onClick={() => {
-                                if (confirm(`Delete "${field.fieldName}"?`)) deleteField(field.id);
-                              }}
+                              onClick={() => setDeleteFieldId(field.id)}
                               className="p-1 hover:bg-red-50 rounded text-red-500"
                             >
                               <Trash2 size={12} />
@@ -224,7 +339,7 @@ export default function SubTabSection({ tabId }: { tabId: string }) {
                           <div>
                             <label className="block text-xs font-medium text-gray-600 mb-1">Value</label>
                             <div className="px-2 py-1.5 bg-gray-50 border rounded text-xs text-gray-900">
-                              {field.thresholdValue || "N/A"}
+                              {field.thresholdValue || field.fieldValues || "N/A"}
                             </div>
                           </div>
                         </div>
@@ -238,26 +353,16 @@ export default function SubTabSection({ tabId }: { tabId: string }) {
 
                     {fieldIndex < (subTab.fields?.length || 0) - 1 && (
                       <div className="flex items-center gap-2 py-2 ml-11">
-                        <button
-                          onClick={() => toggleFieldLogic(fieldLogicKey)}
-                          className={`px-3 py-1 rounded text-xs font-bold ${
-                            currentFieldLogic === "AND"
-                              ? "bg-blue-600 text-white"
-                              : "bg-gray-200 text-gray-500"
-                          }`}
+                        <label className="text-xs text-gray-500 font-semibold">Logic</label>
+                        <select
+                          value={currentFieldLogic}
+                          onChange={(e) => handleFieldLogicChange(fieldLogicKey, e.target.value as LogicOperator)}
+                          className="px-2 py-1 border rounded text-xs bg-white text-gray-800"
                         >
-                          AND
-                        </button>
-                        <button
-                          onClick={() => toggleFieldLogic(fieldLogicKey)}
-                          className={`px-3 py-1 rounded text-xs font-bold ${
-                            currentFieldLogic === "OR"
-                              ? "bg-blue-600 text-white"
-                              : "bg-gray-200 text-gray-500"
-                          }`}
-                        >
-                          OR
-                        </button>
+                          <option value="AND">AND</option>
+                          <option value="OR">OR</option>
+                          <option value="XOR">XOR</option>
+                        </select>
                       </div>
                     )}
                   </div>
@@ -277,30 +382,140 @@ export default function SubTabSection({ tabId }: { tabId: string }) {
                   Add Rule
                 </button>
               </div>
+
+              <div className="bg-white border rounded-lg p-4 mt-2 space-y-4">
+                <div className="flex items-center justify-between">
+                  <h4 className="text-sm font-bold text-gray-900">Advanced Rule Builder (IF-THEN-ELSE)</h4>
+                  <button
+                    onClick={() => setAdvancedOpen((prev) => ({ ...prev, [subTab.id]: !prev[subTab.id] }))}
+                    className="text-xs px-3 py-1 border rounded hover:bg-gray-50"
+                  >
+                    {advancedOpen[subTab.id] ? "Close" : "Open"}
+                  </button>
+                </div>
+
+                {advancedOpen[subTab.id] && (
+                  <div className="space-y-4 animate-fade-in">
+                    <div className="rounded-md border border-blue-100 bg-blue-50 p-3">
+                      <p className="text-xs font-bold text-blue-700 mb-2">IF (Conditions)</p>
+                      <div className="space-y-2">
+                        {(subTab.fields || []).map((field: any, idx: number) => (
+                          <div key={`${subTab.id}-if-${field.id}`} className="text-xs text-gray-700">
+                            <span className="font-semibold">{field.fieldName}</span>
+                            <span className="mx-1">{field.operator || "=="}</span>
+                            <span className="text-blue-700">{field.thresholdValue || field.fieldValues || "N/A"}</span>
+                            {idx < (subTab.fields?.length || 0) - 1 && (
+                              <span className="ml-2 inline-flex items-center gap-1">
+                                <span className="text-gray-500">next with</span>
+                                <select
+                                  value={fieldLogic[`${subTab.id}-field-${idx}`] || "AND"}
+                                  onChange={(e) => handleFieldLogicChange(`${subTab.id}-field-${idx}`, e.target.value as LogicOperator)}
+                                  className="px-2 py-0.5 border rounded text-xs bg-white"
+                                >
+                                  <option value="AND">AND</option>
+                                  <option value="OR">OR</option>
+                                  <option value="XOR">XOR</option>
+                                </select>
+                              </span>
+                            )}
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+
+                    <div className="grid grid-cols-2 gap-3">
+                      <div>
+                        <label className="block text-xs font-semibold text-gray-600 mb-1">THEN Action</label>
+                        <select
+                          value={subOutcome.thenAction}
+                          onChange={(e) => updateOutcome(subTab.id, { thenAction: e.target.value })}
+                          className="w-full px-2 py-2 border rounded text-sm"
+                        >
+                          <option value="APPROVE">APPROVE</option>
+                          <option value="MANUAL_REVIEW">MANUAL_REVIEW</option>
+                          <option value="REJECT">REJECT</option>
+                          <option value="CUSTOM">CUSTOM</option>
+                        </select>
+                        {subOutcome.thenAction === "CUSTOM" && (
+                          <input
+                            value={subOutcome.thenCustom}
+                            onChange={(e) => updateOutcome(subTab.id, { thenCustom: e.target.value })}
+                            placeholder="Enter custom THEN action"
+                            className="w-full mt-2 px-2 py-2 border rounded text-sm"
+                          />
+                        )}
+                      </div>
+
+                      <div>
+                        <label className="block text-xs font-semibold text-gray-600 mb-1">ELSE Action</label>
+                        <select
+                          value={subOutcome.elseAction}
+                          onChange={(e) => updateOutcome(subTab.id, { elseAction: e.target.value })}
+                          className="w-full px-2 py-2 border rounded text-sm"
+                        >
+                          <option value="MANUAL_REVIEW">MANUAL_REVIEW</option>
+                          <option value="APPROVE">APPROVE</option>
+                          <option value="REJECT">REJECT</option>
+                          <option value="CUSTOM">CUSTOM</option>
+                        </select>
+                        {subOutcome.elseAction === "CUSTOM" && (
+                          <input
+                            value={subOutcome.elseCustom}
+                            onChange={(e) => updateOutcome(subTab.id, { elseCustom: e.target.value })}
+                            placeholder="Enter custom ELSE action"
+                            className="w-full mt-2 px-2 py-2 border rounded text-sm"
+                          />
+                        )}
+                      </div>
+                    </div>
+
+                    <div className="rounded-md border border-gray-200 bg-gray-50 p-3">
+                      <p className="text-xs font-bold text-gray-700 mb-2">Rule Testing Interface</p>
+                      <div className="grid grid-cols-2 gap-2">
+                        {(subTab.fields || []).map((field: any) => (
+                          <div key={`${subTab.id}-test-${field.id}`}>
+                            <label className="block text-xs text-gray-600 mb-1">{field.fieldName}</label>
+                            <input
+                              value={testInputs[subTab.id]?.[field.id] || ""}
+                              onChange={(e) => updateTestInput(subTab.id, field.id, e.target.value)}
+                              className="w-full px-2 py-1.5 border rounded text-xs bg-white"
+                              placeholder="Enter sample value"
+                            />
+                          </div>
+                        ))}
+                      </div>
+
+                      <button
+                        onClick={() => runRuleTest(subTab)}
+                        className="mt-3 px-3 py-1.5 text-xs bg-blue-600 text-white rounded hover:bg-blue-700"
+                      >
+                        Test Rule
+                      </button>
+
+                      {subResult && (
+                        <div className={`mt-3 p-3 rounded border text-xs ${subResult.matched ? "bg-green-50 border-green-200" : "bg-orange-50 border-orange-200"}`}>
+                          <p className="font-semibold">Decision: {subResult.decision}</p>
+                          <p className="text-gray-600 mt-1">{subResult.details}</p>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                )}
+              </div>
             </div>
 
             {subTabIndex < (subTabs?.length || 0) - 1 && (
               <div className="flex items-center gap-2 py-3">
-                <button
-                  onClick={() => toggleSubTabLogic(subTabLogicKey)}
-                  className={`px-3 py-1 rounded text-xs font-bold ${
-                    currentSubTabLogic === "AND"
-                      ? "bg-gray-700 text-white"
-                      : "bg-gray-200 text-gray-500"
-                  }`}
+                <label className="text-xs text-gray-500 font-semibold">Group Logic</label>
+                <select
+                  value={currentSubTabLogic}
+                  onChange={(e) => handleSubTabLogicChange(subTabLogicKey, e.target.value as LogicOperator)}
+                  className="px-2 py-1 border rounded text-xs bg-white text-gray-800"
                 >
-                  AND
-                </button>
-                <button
-                  onClick={() => toggleSubTabLogic(subTabLogicKey)}
-                  className={`px-3 py-1 rounded text-xs font-bold ${
-                    currentSubTabLogic === "OR"
-                      ? "bg-blue-600 text-white"
-                      : "bg-gray-200 text-gray-500"
-                  }`}
-                >
-                  OR
-                </button>
+                  <option value="AND">AND</option>
+                  <option value="OR">OR</option>
+                  <option value="XOR">XOR</option>
+                </select>
               </div>
             )}
           </div>
@@ -321,11 +536,11 @@ export default function SubTabSection({ tabId }: { tabId: string }) {
         Add Rule Group
       </button>
 
-      <AddSubTabModal
-        isOpen={isModalOpen}
-        onClose={() => {
-          setIsModalOpen(false);
-          setEditingSubTab(null);
+      <SubTabFormDrawer
+        open={isModalOpen}
+        onOpenChange={(open) => {
+          setIsModalOpen(open);
+          if (!open) setEditingSubTab(null);
         }}
         onSubmit={handleAddSubTab}
         isPending={isPending}
@@ -342,12 +557,14 @@ export default function SubTabSection({ tabId }: { tabId: string }) {
         policyId={tabId}
       />
 
-      <AddFieldModal
-        isOpen={isFieldModalOpen}
-        onClose={() => {
-          setIsFieldModalOpen(false);
-          setSelectedSubTabId(null);
-          setEditingField(null);
+      <FieldFormDrawer
+        open={isFieldModalOpen}
+        onOpenChange={(open) => {
+          setIsFieldModalOpen(open);
+          if (!open) {
+            setSelectedSubTabId(null);
+            setEditingField(null);
+          }
         }}
         onSubmit={handleAddField}
         isPending={isFieldPending}
@@ -356,6 +573,46 @@ export default function SubTabSection({ tabId }: { tabId: string }) {
         }
         editData={editingField}
       />
+
+      <AlertDialog open={!!deleteSubTabId} onOpenChange={(open) => !open && setDeleteSubTabId(null)}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Delete Rule Group</AlertDialogTitle>
+            <AlertDialogDescription>
+              Are you sure you want to delete this rule group? This action cannot be undone.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction onClick={() => {
+              if (deleteSubTabId) deleteSubTab(deleteSubTabId);
+              setDeleteSubTabId(null);
+            }}>
+              Delete
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      <AlertDialog open={!!deleteFieldId} onOpenChange={(open) => !open && setDeleteFieldId(null)}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Delete Rule</AlertDialogTitle>
+            <AlertDialogDescription>
+              Are you sure you want to delete this rule? This action cannot be undone.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction onClick={() => {
+              if (deleteFieldId) deleteField(deleteFieldId);
+              setDeleteFieldId(null);
+            }}>
+              Delete
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }

@@ -2,7 +2,17 @@
 
 import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
-import { GitBranch, Search, Eye } from "lucide-react";
+import { GitBranch, Search } from "lucide-react";
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from "@/components/ui/table";
+import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
 
 export default function VersionsPage() {
   const router = useRouter();
@@ -47,61 +57,62 @@ export default function VersionsPage() {
           </div>
         </div>
 
-        <table className="w-full">
-          <thead>
-            <tr className="border-b text-left text-xs font-semibold text-gray-500 uppercase">
-              <th className="pb-3">Policy Name</th>
-              <th className="pb-3">Product</th>
-              <th className="pb-3">Current Version</th>
-              <th className="pb-3">Status</th>
-              <th className="pb-3">Last Modified</th>
-              <th className="pb-3">Actions</th>
-            </tr>
-          </thead>
-          <tbody>
+        <Table>
+          <TableHeader>
+            <TableRow>
+              <TableHead>Policy Name</TableHead>
+              <TableHead>Product</TableHead>
+              <TableHead>Current Version</TableHead>
+              <TableHead>Status</TableHead>
+              <TableHead>Last Modified</TableHead>
+              <TableHead>Actions</TableHead>
+            </TableRow>
+          </TableHeader>
+          <TableBody>
             {loading ? (
-              <tr><td colSpan={6} className="text-center py-8 text-gray-500">Loading...</td></tr>
+              <TableRow><TableCell colSpan={6} className="text-center py-8 text-gray-500">Loading...</TableCell></TableRow>
             ) : filteredPolicies.length === 0 ? (
-              <tr><td colSpan={6} className="text-center py-8 text-gray-500">No policies found</td></tr>
+              <TableRow><TableCell colSpan={6} className="text-center py-8 text-gray-500">No policies found</TableCell></TableRow>
             ) : (
               filteredPolicies.map((policy) => (
-                <tr key={policy.id} className="border-b hover:bg-gray-50">
-                  <td className="py-4">
+                <TableRow key={policy.id}>
+                  <TableCell>
                     <div className="font-semibold text-gray-900">{policy.name}</div>
                     <div className="text-xs text-gray-500">ID: {policy.id.slice(0, 12)}</div>
-                  </td>
-                  <td className="py-4 text-gray-900">{policy.product || "N/A"}</td>
-                  <td className="py-4">
-                    <span className="px-2 py-1 bg-gray-100 rounded text-xs font-medium text-gray-700">
+                  </TableCell>
+                  <TableCell className="text-gray-900">{policy.product || "N/A"}</TableCell>
+                  <TableCell>
+                    <Badge variant="secondary">
                       v{policy.version || "1.0"}
-                    </span>
-                  </td>
-                  <td className="py-4">
-                    <span className={`px-3 py-1 rounded-full text-xs font-medium ${
-                      policy.status === "PUBLISHED" ? "bg-green-100 text-green-700" :
-                      policy.status === "DRAFT" ? "bg-gray-100 text-gray-700" :
-                      "bg-orange-100 text-orange-700"
-                    }`}>
+                    </Badge>
+                  </TableCell>
+                  <TableCell>
+                    <Badge variant={
+                      policy.status === "PUBLISHED" ? "default" :
+                      policy.status === "DRAFT" ? "secondary" :
+                      "outline"
+                    }>
                       {policy.status === "PUBLISHED" ? "Active" : policy.status === "DRAFT" ? "Draft" : "Under Review"}
-                    </span>
-                  </td>
-                  <td className="py-4 text-gray-900">
+                    </Badge>
+                  </TableCell>
+                  <TableCell className="text-gray-900">
                     {new Date(policy.updatedAt).toLocaleDateString()}
-                  </td>
-                  <td className="py-4">
-                    <button
+                  </TableCell>
+                  <TableCell>
+                    <Button
+                      variant="outline"
+                      size="sm"
                       onClick={() => router.push(`/dashboard/policy/${policy.id}/versions`)}
-                      className="px-3 py-2 border rounded-lg text-sm flex items-center gap-2 hover:bg-gray-50 text-gray-900"
                     >
-                      <GitBranch size={14} />
+                      <GitBranch size={14} className="mr-2" />
                       View Versions
-                    </button>
-                  </td>
-                </tr>
+                    </Button>
+                  </TableCell>
+                </TableRow>
               ))
             )}
-          </tbody>
-        </table>
+          </TableBody>
+        </Table>
       </div>
     </div>
   );

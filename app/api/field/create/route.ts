@@ -1,11 +1,12 @@
 import { createField } from "@/controller/field.controller";
 import { ApiResponse } from "@/utils/ApiResponce";
 import { NextRequest, NextResponse } from "next/server";
+import { assertMakerForPolicyEdit, getUserFromRequest } from "@/lib/adminAuth";
 
 export async function POST(req: NextRequest) {
     try {
-        const userDataHeader = req.headers.get("x-user-data");
-        const userData = userDataHeader ? JSON.parse(userDataHeader) : undefined;
+        const userData = getUserFromRequest(req);
+        assertMakerForPolicyEdit(userData.role);
 
         const data = await req.json();
 

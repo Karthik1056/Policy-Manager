@@ -2,13 +2,14 @@ import { NextRequest,NextResponse } from "next/server";
 
 import { ApiResponse } from "@/utils/ApiResponce";
 import { createTab } from "@/controller/tab.controller";
+import { assertMakerForPolicyEdit, getUserFromRequest } from "@/lib/adminAuth";
 
 
 export async function POST(req:NextRequest) {
     
     try {
-        const userDataHeader = req.headers.get("x-user-data");
-        const userData = userDataHeader ? JSON.parse(userDataHeader) : undefined;
+        const userData = getUserFromRequest(req);
+        assertMakerForPolicyEdit(userData.role);
         const data = await req.json();
 
         const tab = await createTab(data, userData);

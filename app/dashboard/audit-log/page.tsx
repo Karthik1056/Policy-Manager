@@ -2,6 +2,9 @@
 
 import { useState, useEffect } from "react";
 import { Search, Download, ChevronDown, ChevronUp, Edit, Trash2, Plus, FileText } from "lucide-react";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
 
 export default function AuditLogPage() {
   const [policies, setPolicies] = useState<any[]>([]);
@@ -58,10 +61,10 @@ export default function AuditLogPage() {
           <h1 className="text-3xl font-bold text-gray-900">Audit Log</h1>
           <p className="text-sm text-gray-500 mt-1">Track all policy changes and modifications</p>
         </div>
-        <button className="px-4 py-2 border rounded-lg text-sm font-medium flex items-center gap-2 hover:bg-gray-50">
-          <Download size={16} />
+        <Button variant="outline">
+          <Download size={16} className="mr-2" />
           Export Audit Log
-        </button>
+        </Button>
       </div>
 
       <div className="bg-white rounded-xl border shadow-sm p-6">
@@ -85,58 +88,67 @@ export default function AuditLogPage() {
         ) : (
           <div className="space-y-3">
             {filteredPolicies.map((policy) => (
-              <div key={policy.id} className="border rounded-lg">
-                <div 
-                  className="flex items-center justify-between p-4 cursor-pointer hover:bg-gray-50"
+              <Card key={policy.id}>
+                <CardHeader 
+                  className="cursor-pointer hover:bg-gray-50 transition-colors"
                   onClick={() => setExpandedPolicy(expandedPolicy === policy.id ? null : policy.id)}
                 >
-                  <div className="flex-1">
-                    <h3 className="font-semibold text-gray-900">{policy.name}</h3>
-                    <div className="flex items-center gap-4 text-sm text-gray-500 mt-1">
-                      <span>Version: {policy.version}</span>
-                      <span>•</span>
-                      <span>{policy.auditLogs?.length || 0} audit logs</span>
+                  <div className="flex items-center justify-between">
+                    <div className="flex-1">
+                      <CardTitle className="text-lg">{policy.name}</CardTitle>
+                      <div className="flex items-center gap-4 text-sm text-gray-500 mt-2">
+                        <span>Version: {policy.version}</span>
+                        <span>•</span>
+                        <span>{policy.auditLogs?.length || 0} audit logs</span>
+                      </div>
                     </div>
+                    <Button variant="ghost" size="icon">
+                      {expandedPolicy === policy.id ? <ChevronUp size={20} /> : <ChevronDown size={20} />}
+                    </Button>
                   </div>
-                  <button className="p-2 hover:bg-gray-100 rounded">
-                    {expandedPolicy === policy.id ? <ChevronUp size={20} /> : <ChevronDown size={20} />}
-                  </button>
-                </div>
+                </CardHeader>
 
                 {expandedPolicy === policy.id && (
-                  <div className="border-t bg-gray-50 p-4">
+                  <CardContent className="border-t bg-gray-50 pt-4">
                     {policy.auditLogs?.length === 0 ? (
                       <p className="text-center text-gray-500 py-4">No audit logs for this policy</p>
                     ) : (
                       <div className="space-y-2">
                         {policy.auditLogs.map((log: any) => (
-                          <div key={log.id} className="bg-white rounded-lg p-3 border">
-                            <div className="flex items-start justify-between">
-                              <div className="flex items-start gap-3 flex-1">
-                                {getActionIcon(log.action)}
-                                <div className="flex-1">
-                                  <div className="flex items-center gap-2 mb-1">
-                                    <span className={`px-2 py-0.5 rounded-full text-xs font-medium ${getActionColor(log.action)}`}>
-                                      {log.action}
-                                    </span>
-                                    <span className="text-xs text-gray-500">
-                                      by {log.userName || "Unknown"}
-                                    </span>
+                          <Card key={log.id}>
+                            <CardContent className="p-3">
+                              <div className="flex items-start justify-between">
+                                <div className="flex items-start gap-3 flex-1">
+                                  {getActionIcon(log.action)}
+                                  <div className="flex-1">
+                                    <div className="flex items-center gap-2 mb-1">
+                                      <Badge variant={
+                                        log.action === "CREATED" ? "default" :
+                                        log.action === "UPDATED" ? "outline" :
+                                        log.action === "DELETED" ? "destructive" :
+                                        "secondary"
+                                      }>
+                                        {log.action}
+                                      </Badge>
+                                      <span className="text-xs text-gray-500">
+                                        by {log.userName || "Unknown"}
+                                      </span>
+                                    </div>
+                                    <p className="text-sm text-gray-600">{log.changes || "No details"}</p>
                                   </div>
-                                  <p className="text-sm text-gray-600">{log.changes || "No details"}</p>
+                                </div>
+                                <div className="text-xs text-gray-400">
+                                  {new Date(log.createdAt).toLocaleString()}
                                 </div>
                               </div>
-                              <div className="text-xs text-gray-400">
-                                {new Date(log.createdAt).toLocaleString()}
-                              </div>
-                            </div>
-                          </div>
+                            </CardContent>
+                          </Card>
                         ))}
                       </div>
                     )}
-                  </div>
+                  </CardContent>
                 )}
-              </div>
+              </Card>
             ))}
           </div>
         )}
