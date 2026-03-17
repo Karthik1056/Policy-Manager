@@ -5,6 +5,7 @@ import { Search, Download, ChevronDown, ChevronUp, Edit, Trash2, Plus, FileText 
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import api from "@/lib/api";
 
 export default function AuditLogPage() {
   const [policies, setPolicies] = useState<any[]>([]);
@@ -14,8 +15,8 @@ export default function AuditLogPage() {
 
   useEffect(() => {
     Promise.all([
-      fetch("/api/policy/getAll").then(res => res.json()),
-      fetch("/api/policy/audit").then(res => res.json())
+      api.get("/policy/getAll").then(r => r.data),
+      api.get("/policy/audit").then(r => r.data)
     ])
       .then(([policiesData, logsData]) => {
         const policiesList = policiesData.data || [];

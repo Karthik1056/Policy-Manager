@@ -3,6 +3,7 @@
 import { FileDown } from "lucide-react";
 import { useState } from "react";
 import toast from "react-hot-toast";
+import api from "@/lib/api";
 
 interface DownloadPolicyDocProps {
     policyId: string;
@@ -15,11 +16,8 @@ export default function DownloadPolicyDoc({ policyId, policyName }: DownloadPoli
     const handleDownload = async () => {
         setLoading(true);
         try {
-            const response = await fetch(`/api/policy/${policyId}/document`);
-            
-            if (!response.ok) throw new Error("Failed to generate document");
-
-            const blob = await response.blob();
+            const response = await api.get(`/policy/${policyId}/document`, { responseType: "blob" });
+            const blob = new Blob([response.data]);
             const url = window.URL.createObjectURL(blob);
             const a = document.createElement("a");
             a.href = url;
@@ -28,7 +26,6 @@ export default function DownloadPolicyDoc({ policyId, policyName }: DownloadPoli
             a.click();
             window.URL.revokeObjectURL(url);
             document.body.removeChild(a);
-            
             toast.success("Document downloaded successfully");
         } catch (error) {
             toast.error("Failed to download document");

@@ -20,6 +20,7 @@ import { Badge } from "@/components/ui/badge";
 import { Card, CardContent } from "@/components/ui/card";
 import { Checkbox } from "@/components/ui/checkbox";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
+import api from "@/lib/api";
 
 export default function DashboardOverview() {
   const router = useRouter();
@@ -32,13 +33,11 @@ export default function DashboardOverview() {
   const [productFilter, setProductFilter] = useState("all");
 
   useEffect(() => {
-    fetch("/api/policy/getAll")
-      .then((res) => res.json())
-      .then((data) => {
-        setPolicies(data.data || []);
-        setFilteredPolicies(data.data || []);
-        setLoading(false);
-      });
+    api.get("/policy/getAll").then(({ data }) => {
+      setPolicies(data.data || []);
+      setFilteredPolicies(data.data || []);
+      setLoading(false);
+    });
   }, []);
 
   useEffect(() => {

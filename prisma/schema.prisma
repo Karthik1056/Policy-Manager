@@ -113,6 +113,8 @@ model PolicyEngine {
   version       String         
   startDate     DateTime       @default(now())
   description   String?
+  dynamicFields Json?
+  
   
   makerId       String
   maker         User           @relation("Maker", fields: [makerId], references: [id])
@@ -145,6 +147,7 @@ model SubTab {
   name          String
   orderIndex    Int
   documentNotes String?
+  displayMode   String?  @default("document")
   tabId         String
   tab           Tab      @relation(fields: [tabId], references: [id], onDelete: Cascade)
   fields        Field[]

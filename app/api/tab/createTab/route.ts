@@ -18,10 +18,18 @@ export async function POST(req:NextRequest) {
             new ApiResponse(201,"Tab created successfully",tab,true),
             {status:201}
         )
-    } catch (error) {
+    } catch (error: any) {
+        const message = String(error?.message || "Internal server error");
+        const normalized = message.toLowerCase();
+        const derivedStatus = normalized.includes("unauthorized")
+            ? 401
+            : normalized.includes("forbidden")
+                ? 403
+                : 500;
+        const statusCode = Number(error?.statusCode) || derivedStatus;
         return NextResponse.json(
-            new ApiResponse(500,"Internal server error","",false),
-            {status:500}
+            new ApiResponse(statusCode, message, "", false),
+            {status:statusCode}
         )
     }
 }

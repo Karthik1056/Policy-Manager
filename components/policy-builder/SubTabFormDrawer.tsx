@@ -29,6 +29,7 @@ const subTabSchema = z.object({
   name: z.string().min(1, "Sub-category name is required"),
   orderIndex: z.number(),
   documentNotes: z.string().optional(),
+  displayMode: z.enum(["document", "table"]),
 });
 
 type SubTabFormValues = z.infer<typeof subTabSchema>;
@@ -39,7 +40,7 @@ interface SubTabFormDrawerProps {
   onSubmit: (data: SubTabFormValues) => void;
   isPending: boolean;
   nextOrderIndex: number;
-  editData?: { name: string; orderIndex: number; documentNotes?: string } | null;
+  editData?: { name: string; orderIndex: number; documentNotes?: string | null; displayMode?: string | null } | null;
   policyId?: string;
 }
 
@@ -58,24 +59,29 @@ export default function SubTabFormDrawer({
       name: "",
       orderIndex: nextOrderIndex,
       documentNotes: "",
+      displayMode: "document",
     },
   });
 
   useEffect(() => {
-    if (editData) {
-      form.reset({
-        name: editData.name,
-        orderIndex: editData.orderIndex,
-        documentNotes: editData.documentNotes || "",
-      });
-    } else {
-      form.reset({
-        name: "",
-        orderIndex: nextOrderIndex,
-        documentNotes: "",
-      });
+    if (open) {
+      if (editData) {
+        form.reset({
+          name: editData.name,
+          orderIndex: editData.orderIndex,
+          documentNotes: editData.documentNotes || "",
+          displayMode: (editData.displayMode as "document" | "table") || "document",
+        });
+      } else {
+        form.reset({
+          name: "",
+          orderIndex: nextOrderIndex,
+          documentNotes: "",
+          displayMode: "document",
+        });
+      }
     }
-  }, [editData, nextOrderIndex, form]);
+  }, [editData, nextOrderIndex, form, open]);
 
   const handleFormSubmit = (values: SubTabFormValues) => {
     onSubmit(values);
@@ -123,6 +129,29 @@ export default function SubTabFormDrawer({
                     </FormControl>
                     <FormDescription>
                       Determines the display order of this sub-category
+                    </FormDescription>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+
+              <FormField
+                control={form.control}
+                name="displayMode"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Display Mode</FormLabel>
+                    <FormControl>
+                      <select
+                        {...field}
+                        className="w-full px-3 py-2 border rounded-md text-sm bg-white"
+                      >
+                        <option value="document">Document (List)</option>
+                        <option value="table">Table (Grid)</option>
+                      </select>
+                    </FormControl>
+                    <FormDescription>
+                      Choose how rules in this group are displayed.
                     </FormDescription>
                     <FormMessage />
                   </FormItem>

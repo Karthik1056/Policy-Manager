@@ -1,6 +1,7 @@
 import { prisma } from "@/lib/prisma";
 import { ApiError } from "@/utils/ApiError";
 import asyncHandler from "@/utils/AsyncHandlerService";
+import axios from "axios";
 
 export const queryPolicy = asyncHandler(async (policyId: string, query: string) => {
     const policy = await prisma.policyEngine.findUnique({
@@ -80,27 +81,21 @@ Respond in JSON format:
 }`;
 
     try {
-        const response = await fetch("https://api.openai.com/v1/chat/completions", {
-            method: "POST",
-            headers: {
-                "Content-Type": "application/json",
-                "Authorization": `Bearer ${apiKey}`
-            },
-            body: JSON.stringify({
+        const response = await axios.post(
+            "https://api.openai.com/v1/chat/completions",
+            {
                 model: "gpt-3.5-turbo",
                 messages: [{ role: "user", content: prompt }],
                 temperature: 0.3,
                 max_tokens: 1000
-            })
-        });
+            },
+            { headers: { "Authorization": `Bearer ${apiKey}` } }
+        );
 
-        if (response.ok) {
-            const data = await response.json();
-            const content = data.choices[0].message.content;
-            const jsonMatch = content.match(/\{[\s\S]*\}/);
-            if (jsonMatch) {
-                return JSON.parse(jsonMatch[0]);
-            }
+        const content = response.data.choices[0].message.content;
+        const jsonMatch = content.match(/\{[\s\S]*\}/);
+        if (jsonMatch) {
+            return JSON.parse(jsonMatch[0]);
         }
     } catch (error) {
         console.error("AI evaluation failed:", error);

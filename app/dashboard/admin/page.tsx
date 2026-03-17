@@ -1,44 +1,25 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
-import toast from "react-hot-toast";
+import { useMemo, useState } from "react";
 import { useAppSelector } from "@/store/hooks";
-
-type AdminUser = { id: string; name: string; email: string; role: string; createdAt?: string };
-type Policy = { id: string; name: string; status: string };
-type RoleDef = { id: string; name: string; description?: string | null };
-type OrgUnit = { id: string; name: string; level: number; parent_id?: string | null };
-type PolicyAccess = { id: string; policy_id: string; user_id: string; access_type: string; created_at?: string };
-type WorkflowStep = {
-  id?: string;
-  step_order: number;
-  step_name: string;
-  approval_mode: string;
-  required_approvals: number;
-  role_name?: string | null;
-  user_ids?: string | null;
-  condition_json?: string | null;
-  sla_hours?: number;
-};
-type Workflow = {
-  id: string;
-  name: string;
-  flow_type: string;
-  sla_hours: number;
-  is_active?: boolean;
-  steps?: WorkflowStep[];
-};
-type ApprovalInstance = {
-  id: string;
-  policy_id: string;
-  workflow_id: string;
-  step_id: string;
-  assigned_user_id?: string | null;
-  committee_group?: string | null;
-  status: string;
-  due_at?: string | null;
-  is_overdue: boolean;
-};
+import {
+  useAdminUsers,
+  useAdminPolicies,
+  useAdminRoles,
+  useAdminOrgUnits,
+  useAdminPolicyAccess,
+  useAdminWorkflows,
+  useAdminInstances,
+  useCreateUser,
+  useUpdateUserRole,
+  useDeleteUser,
+  useCreateRole,
+  useCreateOrgUnit,
+  useAssignAccess,
+  useRemoveAccess,
+  useCreateWorkflow,
+  useAssignWorkflow,
+} from "@/hooks/useAdmin";
 
 type StepDraft = {
   stepOrder: number;
@@ -68,14 +49,23 @@ export default function AdminPage() {
   const isTechnicalAdmin = role === "IT_ADMIN";
   const isPolicyAdmin = role === "ADMIN";
 
-  const [loading, setLoading] = useState(true);
-  const [users, setUsers] = useState<AdminUser[]>([]);
-  const [policies, setPolicies] = useState<Policy[]>([]);
-  const [roles, setRoles] = useState<RoleDef[]>([]);
-  const [orgUnits, setOrgUnits] = useState<OrgUnit[]>([]);
-  const [accessRows, setAccessRows] = useState<PolicyAccess[]>([]);
-  const [workflows, setWorkflows] = useState<Workflow[]>([]);
-  const [instances, setInstances] = useState<ApprovalInstance[]>([]);
+  const { data: users = [], isLoading: usersLoading } = useAdminUsers();
+  const { data: policies = [] } = useAdminPolicies();
+  const { data: roles = [] } = useAdminRoles();
+  const { data: orgUnits = [] } = useAdminOrgUnits();
+  const { data: accessRows = [] } = useAdminPolicyAccess(isPolicyAdmin);
+  const { data: workflows = [] } = useAdminWorkflows(isPolicyAdmin);
+  const { data: instances = [] } = useAdminInstances(isPolicyAdmin);
+
+  const createUserMutation = useCreateUser();
+  const updateUserRoleMutation = useUpdateUserRole();
+  const deleteUserMutation = useDeleteUser();
+  const createRoleMutation = useCreateRole();
+  const createOrgUnitMutation = useCreateOrgUnit();
+  const assignAccessMutation = useAssignAccess();
+  const removeAccessMutation = useRemoveAccess();
+  const createWorkflowMutation = useCreateWorkflow();
+  const assignWorkflowMutation = useAssignWorkflow();
 
   const [newUser, setNewUser] = useState({ name: "", email: "", role: "MAKER", password: "" });
   const [newRole, setNewRole] = useState({ name: "", description: "" });
@@ -87,122 +77,38 @@ export default function AdminPage() {
 
   const isOverdueCount = useMemo(() => instances.filter((i) => i.is_overdue && i.status === "PENDING").length, [instances]);
 
-  const loadAll = async () => {
-    setLoading(true);
-    try {
-      const fetchJson = async (url: string) => {
-        const res = await fetch(url);
-        if (!res.ok) return { data: [] };
-        return res.json();
-      };
-
-      const [u, p, r, o, a, w, i] = await Promise.all([
-        fetchJson("/api/admin/users"),
-        fetchJson("/api/policy/getAll"),
-        fetchJson("/api/admin/roles"),
-        fetchJson("/api/admin/org"),
-        isPolicyAdmin ? fetchJson("/api/admin/policy-access") : Promise.resolve({ data: [] }),
-        isPolicyAdmin ? fetchJson("/api/admin/workflows") : Promise.resolve({ data: [] }),
-        isPolicyAdmin ? fetchJson("/api/admin/workflows/instances") : Promise.resolve({ data: [] }),
-      ]);
-
-      setUsers(u?.data || []);
-      setPolicies(p?.data || []);
-      setRoles(r?.data || []);
-      setOrgUnits(o?.data || []);
-      setAccessRows(a?.data || []);
-      setWorkflows(w?.data || []);
-      setInstances(i?.data || []);
-    } catch {
-      toast.error("Failed to load admin data");
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  useEffect(() => {
-    loadAll();
-  }, []);
-
-  const createUser = async () => {
-    const res = await fetch("/api/admin/users", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(newUser),
+  const createUser = () => {
+    createUserMutation.mutate(newUser, {
+      onSuccess: () => setNewUser({ name: "", email: "", role: "MAKER", password: "" }),
     });
-    const data = await res.json();
-    if (!res.ok) return toast.error(data.message || "Failed to create user");
-    toast.success("User created");
-    setNewUser({ name: "", email: "", role: "MAKER", password: "" });
-    loadAll();
   };
 
-  const updateUserRole = async (id: string, role: string) => {
-    const res = await fetch("/api/admin/users", {
-      method: "PATCH",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ id, role }),
+  const updateUserRole = (id: string, role: string) => {
+    updateUserRoleMutation.mutate({ id, role });
+  };
+
+  const deleteUser = (id: string) => {
+    deleteUserMutation.mutate(id);
+  };
+
+  const createRole = () => {
+    createRoleMutation.mutate(newRole, {
+      onSuccess: () => setNewRole({ name: "", description: "" }),
     });
-    const data = await res.json();
-    if (!res.ok) return toast.error(data.message || "Failed to update user");
-    toast.success("User role updated");
-    loadAll();
   };
 
-  const deleteUser = async (id: string) => {
-    const res = await fetch(`/api/admin/users?id=${id}`, { method: "DELETE" });
-    const data = await res.json();
-    if (!res.ok) return toast.error(data.message || "Failed to delete user");
-    toast.success("User deleted");
-    loadAll();
-  };
-
-  const createRole = async () => {
-    const res = await fetch("/api/admin/roles", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(newRole),
+  const createOrgUnit = () => {
+    createOrgUnitMutation.mutate(newOrgUnit, {
+      onSuccess: () => setNewOrgUnit({ name: "", level: 1, parentId: "" }),
     });
-    const data = await res.json();
-    if (!res.ok) return toast.error(data.message || "Failed to create role");
-    toast.success("Role created");
-    setNewRole({ name: "", description: "" });
-    loadAll();
   };
 
-  const createOrgUnit = async () => {
-    const res = await fetch("/api/admin/org", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(newOrgUnit),
-    });
-    const data = await res.json();
-    if (!res.ok) return toast.error(data.message || "Failed to create org unit");
-    toast.success("Org unit created");
-    setNewOrgUnit({ name: "", level: 1, parentId: "" });
-    loadAll();
+  const assignAccess = () => {
+    assignAccessMutation.mutate(access);
   };
 
-  const assignAccess = async () => {
-    const res = await fetch("/api/admin/policy-access", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(access),
-    });
-    const data = await res.json();
-    if (!res.ok) return toast.error(data.message || "Failed to assign access");
-    toast.success("Policy access assigned");
-    loadAll();
-  };
-
-  const removeAccess = async (policyId: string, userId: string) => {
-    const res = await fetch(`/api/admin/policy-access?policyId=${policyId}&userId=${userId}`, {
-      method: "DELETE",
-    });
-    const data = await res.json();
-    if (!res.ok) return toast.error(data.message || "Failed to remove access");
-    toast.success("Access removed");
-    loadAll();
+  const removeAccess = (policyId: string, userId: string) => {
+    removeAccessMutation.mutate({ policyId, userId });
   };
 
   const addStep = () => setSteps((prev) => [...prev, emptyStep(prev.length + 1)]);
@@ -210,7 +116,7 @@ export default function AdminPage() {
     setSteps((prev) => prev.filter((_, i) => i !== index).map((step, i) => ({ ...step, stepOrder: i + 1 })));
   };
 
-  const createWorkflow = async () => {
+  const createWorkflow = () => {
     const parsedSteps = [] as Array<Record<string, unknown>>;
 
     for (const s of steps) {
@@ -219,7 +125,6 @@ export default function AdminPage() {
         try {
           conditionJson = JSON.parse(s.conditionJson);
         } catch {
-          toast.error(`Invalid JSON in ${s.stepName}`);
           return;
         }
       }
@@ -244,36 +149,22 @@ export default function AdminPage() {
       steps: parsedSteps,
     };
 
-    const res = await fetch("/api/admin/workflows", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(payload),
+    createWorkflowMutation.mutate(payload, {
+      onSuccess: () => {
+        setWorkflow({ name: "", flowType: "SEQUENTIAL", slaHours: 24, orgUnitId: "" });
+        setSteps([emptyStep(1)]);
+      },
     });
-    const data = await res.json();
-    if (!res.ok) return toast.error(data.message || "Failed to create workflow");
-
-    toast.success("Workflow created");
-    setWorkflow({ name: "", flowType: "SEQUENTIAL", slaHours: 24, orgUnitId: "" });
-    setSteps([emptyStep(1)]);
-    loadAll();
   };
 
-  const assignWorkflow = async (policyId: string) => {
+  const assignWorkflow = (policyId: string) => {
     const workflowId = assignMap[policyId];
-    if (!workflowId) return toast.error("Select a workflow first");
-
-    const res = await fetch("/api/admin/workflows/assign", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ policyId, workflowId }),
-    });
-    const data = await res.json();
-    if (!res.ok) return toast.error(data.message || "Failed to assign workflow");
-    toast.success("Workflow assigned to policy");
+    if (!workflowId) return;
+    assignWorkflowMutation.mutate({ policyId, workflowId });
   };
 
   const userById = useMemo(() => {
-    const dict: Record<string, AdminUser> = {};
+    const dict: Record<string, any> = {};
     for (const u of users) dict[u.id] = u;
     return dict;
   }, [users]);
@@ -497,7 +388,7 @@ export default function AdminPage() {
       {isPolicyAdmin && (
       <section className="bg-white rounded-xl border p-5">
         <h2 className="font-semibold mb-3">SLA Tracking (Approval Instances)</h2>
-        {loading ? (
+        {usersLoading ? (
           <p className="text-sm text-gray-500">Loading...</p>
         ) : (
           <div className="space-y-2 max-h-72 overflow-auto">

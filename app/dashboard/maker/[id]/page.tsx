@@ -2,9 +2,10 @@
 
 import { useState, useEffect } from "react";
 import { useParams, useRouter } from "next/navigation";
-import { useSelector } from "react-redux";
+import { useSelector, useDispatch } from "react-redux";
 import { RootState } from "@/store";
-import { ArrowLeft, Save, History, ChevronDown, ChevronUp, ToggleLeft, ToggleRight } from "lucide-react";
+import { setPolicyJson } from "@/store/slices/policySlice";
+import { ArrowLeft, Save, History, ChevronDown, ChevronUp, ToggleLeft, ToggleRight, FileText, X, AlignLeft, Table2 } from "lucide-react";
 import TabList from "@/components/policy-builder/TabList";
 import SubTabSection from "@/components/policy-builder/SubTabSection";
 import { useQuery } from "@tanstack/react-query";
@@ -30,16 +31,23 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
+import FloatingChatBot from "@/components/policy-builder/FloatingChatBot";
+import PolicyDraft from "@/components/policy-builder/PolicyDraft";
+import AnalysisButton from "@/components/policy-builder/AnalysisButton";
 
 export default function PolicyBuilderPage() {
   const params = useParams();
   const router = useRouter();
+  const dispatch = useDispatch();
   const user = useSelector((state: RootState) => state.auth.user);
+  const policyJson = useSelector((state: RootState) => state.policy.policyJson);
   const isChecker = user?.role === "CHECKER";
   
   const [activeTabId, setActiveTabId] = useState<string | null>(null);
   const [showPolicyUpdate, setShowPolicyUpdate] = useState(false);
   const [isPolicyInfoOpen, setIsPolicyInfoOpen] = useState(false);
+  const [isDraftPanelOpen, setIsDraftPanelOpen] = useState(false);
+  const [draftViewMode, setDraftViewMode] = useState<"document" | "table">("document");
   const [policy, setPolicy] = useState<any>(null);
   const [checkers, setCheckers] = useState<any[]>([]);
   const [versionChangeEnabled, setVersionChangeEnabled] = useState(false);
@@ -58,17 +66,16 @@ export default function PolicyBuilderPage() {
   });
 
   useEffect(() => {
-    fetch("/api/users/get?role=CHECKER")
-      .then((res) => res.json())
-      .then((data) => setCheckers(data.data || []));
+    api.get("/users/get?role=CHECKER").then(({ data }) => {
+      const list = data?.data;
+      setCheckers(Array.isArray(list) ? list : []);
+    }).catch(() => setCheckers([]));
   }, []);
 
   useEffect(() => {
     if (params && params.id) {
-      fetch(`/api/policy/${params.id}`)
-        .then((res) => res.json())
-        .then((data) => {
-          const policyData = data.data;
+      api.get(`/policy/${params.id}`).then(({ data }) => {
+        const policyData = data.data;
           setPolicy(policyData);
           setFormData({
             name: policyData.name || "",
@@ -90,9 +97,22 @@ export default function PolicyBuilderPage() {
       if (tabsData.length > 0 && !activeTabId) {
         setActiveTabId(tabsData[0].id);
       }
+      
+      // Update policy JSON in Redux
+      if (policy && tabsData) {
+        const updatedPolicyJson = {
+          ...policy,
+          tabs: tabsData
+        };
+        dispatch(setPolicyJson(updatedPolicyJson));
+      }
+      
       return tabsData;
     },
     enabled: !!params?.id,
+    staleTime: 0,
+    refetchOnWindowFocus: true,
+    refetchInterval: 1500,
   });
 
   const handleVersionToggle = async () => {
@@ -141,7 +161,7 @@ export default function PolicyBuilderPage() {
   };
 
   return (
-    <div className="min-h-screen bg-gray-50">
+    <div className="relative min-h-screen overflow-hidden bg-gray-50">
       <div className="bg-white border-b px-8 py-4">
         <div className="flex items-center justify-between">
           <Button variant="ghost" onClick={() => router.back()}>
@@ -149,6 +169,13 @@ export default function PolicyBuilderPage() {
             Back
           </Button>
           <div className="flex gap-3">
+            <button
+              onClick={() => setIsDraftPanelOpen((prev) => !prev)}
+              className="rounded-md border border-gray-300 px-3 py-2 text-sm font-medium text-gray-700 transition-all hover:bg-gray-50 inline-flex items-center gap-2"
+            >
+              <FileText size={16} />
+              {isDraftPanelOpen ? "Hide Document" : "View Document"}
+            </button>
             {isChecker && (
               <Button variant="outline" onClick={() => setShowPolicyUpdate(!showPolicyUpdate)}>
                 <History size={16} className="mr-2" />
@@ -338,32 +365,120 @@ export default function PolicyBuilderPage() {
           )}
         </Card>
 
-        <Card>
-          <CardHeader>
-            <div className="flex items-center justify-between">
-              <CardTitle>Policy Rules</CardTitle>
-            </div>
-          </CardHeader>
-          <CardContent>
-            {canEdit ? (
-              <>
-                <TabList
-                  tabs={tabs}
-                  activeId={activeTabId}
-                  onSelect={setActiveTabId}
-                  policyId={params?.id as string}
-                />
-                <div className="mt-6">
-                  {activeTabId && <SubTabSection tabId={activeTabId} />}
+        <div className="w-full">
+            <Card>
+              <CardHeader>
+                <div className="flex items-center justify-between">
+                  <CardTitle>Policy Rules</CardTitle>
+                  <AnalysisButton 
+                    policyData={policyJson || policy}
+                    policyId={params?.id as string}
+                  />
                 </div>
-              </>
-            ) : (
-              <div className="text-center py-8 text-gray-500">
-                <p>This policy is published and cannot be edited.</p>
+              </CardHeader>
+              <CardContent>
+                {canEdit ? (
+                  <>
+                    <TabList
+                      tabs={tabs}
+                      activeId={activeTabId}
+                      onSelect={setActiveTabId}
+                      policyId={params?.id as string}
+                    />
+                    <div className="mt-6">
+                      {activeTabId && <SubTabSection tabId={activeTabId} />}
+                    </div>
+                  </>
+                ) : (
+                  <div className="text-center py-8 text-gray-500">
+                    <p>This policy is published and cannot be edited.</p>
+                  </div>
+                )}
+              </CardContent>
+            </Card>
+        </div>
+
+        {/* Sliding Draft Panel */}
+        <aside
+          className={`fixed inset-y-0 right-0 z-40 w-full max-w-2xl border-l bg-white shadow-2xl transition-transform duration-300 ease-in-out ${
+            isDraftPanelOpen ? "translate-x-0" : "translate-x-full"
+          }`}
+        >
+          <div className="flex h-full flex-col">
+            <div className="flex items-center justify-between border-b bg-white px-5 py-3">
+              <div className="flex items-center gap-2">
+                <FileText size={18} className="text-gray-600" />
+                <h3 className="text-sm font-semibold text-gray-900">Policy Document Draft</h3>
               </div>
-            )}
-          </CardContent>
-        </Card>
+              <div className="flex items-center gap-2">
+                <div className="flex items-center rounded-md border border-slate-300 bg-white p-0.5 shadow-sm">
+                  <button
+                    type="button"
+                    onClick={() => setDraftViewMode("document")}
+                    className={`inline-flex items-center gap-1.5 rounded-sm px-3 py-1 text-xs font-semibold transition-colors ${
+                      draftViewMode === "document"
+                        ? "bg-slate-100 text-slate-800 shadow-sm"
+                        : "text-slate-500 hover:text-slate-700"
+                    }`}
+                  >
+                    <AlignLeft size={14} />
+                    Document
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setDraftViewMode("table")}
+                    className={`inline-flex items-center gap-1.5 rounded-sm px-3 py-1 text-xs font-semibold transition-colors ${
+                      draftViewMode === "table"
+                        ? "bg-slate-100 text-slate-800 shadow-sm"
+                        : "text-slate-500 hover:text-slate-700"
+                    }`}
+                  >
+                    <Table2 size={14} />
+                    Table
+                  </button>
+                </div>
+                <button
+                  onClick={() => setIsDraftPanelOpen(false)}
+                  className="rounded-md p-1.5 text-gray-500 hover:bg-gray-100 hover:text-gray-700 transition-colors"
+                >
+                  <X size={18} />
+                </button>
+              </div>
+            </div>
+            <div className="flex-1 overflow-y-auto">
+              <PolicyDraft
+                data={{
+                  name: policy?.name || formData.name,
+                  description: policy?.description || formData.description,
+                  product: policy?.product || formData.product,
+                  version: policy?.version || formData.version,
+                  status: policy?.status || formData.status,
+                  startDate: policy?.startDate || policy?.effectiveDate || policy?.createdAt,
+                  tabs: tabs as Tab[],
+                }}
+                viewMode={draftViewMode}
+              />
+            </div>
+          </div>
+        </aside>
+
+        {/* Backdrop */}
+        {isDraftPanelOpen && (
+          <div
+            className="fixed inset-0 z-30 bg-black/20 backdrop-blur-sm"
+            onClick={() => setIsDraftPanelOpen(false)}
+          />
+        )}
+
+        {canEdit && (
+          <FloatingChatBot 
+            currentPolicy={policyJson || policy}
+            policyId={params?.id as string}
+            onPolicyUpdate={(action) => {
+              window.location.reload();
+            }}
+          />
+        )}
       </div>
 
       {showConfirmModal && (

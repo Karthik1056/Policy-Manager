@@ -23,10 +23,11 @@ export async function POST(req:NextRequest) {
             new ApiResponse(201, "SubTab created successfully", returnData, true),
             {status: 201}
         )
-    } catch (error) {
+    } catch (error: any) {
+        const statusCode = Number(error?.statusCode) || 500;
         return NextResponse.json(
-            new ApiResponse(500, "Internal server error", "", false),
-            {status: 500}
+            new ApiResponse(statusCode, error?.message || "Internal server error", "", false),
+            {status: statusCode}
         )
     }
 }

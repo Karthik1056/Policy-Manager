@@ -3,6 +3,7 @@
 import { ChevronDown, ChevronUp, MessageSquare, Send } from "lucide-react";
 import { useState } from "react";
 import toast from "react-hot-toast";
+import api from "@/lib/api";
 
 interface PolicyQueryEngineProps {
     policyId: string;
@@ -22,21 +23,11 @@ export default function PolicyQueryEngine({ policyId }: PolicyQueryEngineProps) 
 
         setLoading(true);
         try {
-            const response = await fetch(`/api/policy/${policyId}/query`, {
-                method: "POST",
-                headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({ query })
-            });
-
-            const raw = await response.text();
-            const data = raw ? JSON.parse(raw) : {};
-
-            if (!response.ok) throw new Error(data?.message || "Failed to evaluate query");
-
+            const { data } = await api.post(`/policy/${policyId}/query`, { query });
             setResult(data.data);
             toast.success("Query evaluated!");
         } catch (error: any) {
-            toast.error(error.message || "Failed to evaluate query");
+            toast.error(error?.response?.data?.message || error.message || "Failed to evaluate query");
         } finally {
             setLoading(false);
         }

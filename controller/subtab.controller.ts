@@ -4,7 +4,7 @@ import { ApiError } from "@/utils/ApiError";
 import asyncHandler from "@/utils/AsyncHandlerService";
 
 export const createSubTab = asyncHandler(async (data: subTabInterface, userData?: { name?: string }) => {
-	const { name, orderIndex, tabId } = data;
+	const { name, orderIndex, tabId, documentNotes, displayMode } = data;
 
 	if (!name || orderIndex === undefined || !tabId) {
 		throw new ApiError(400, "All fields are required");
@@ -22,6 +22,8 @@ export const createSubTab = asyncHandler(async (data: subTabInterface, userData?
 		data: {
 			name,
 			orderIndex,
+			documentNotes: documentNotes ?? null,
+			displayMode: displayMode ?? "document",
 			tabId
 		}
 	});

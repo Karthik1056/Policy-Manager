@@ -12,7 +12,7 @@ export const useSimulatePolicy = () => {
         policyId,
         testData,
       });
-      return unwrapApiData<unknown[]>(data); // This is the array of execution logs
+      return unwrapApiData<unknown[]>(data); 
     },
   });
 };

@@ -2,6 +2,7 @@
 
 import { useState, useRef, useEffect } from "react";
 import { Bold, Italic, Underline, List, ListOrdered, Plus } from "lucide-react";
+import api from "@/lib/api";
 
 interface DocumentEditorProps {
   value: string;
@@ -24,8 +25,7 @@ export default function DocumentEditor({ value, onChange, policyId, placeholder 
 
   const fetchAvailableFields = async () => {
     try {
-      const response = await fetch(`/api/field/getAll?policyId=${policyId}`);
-      const data = await response.json();
+      const { data } = await api.get(`/field/getAll?policyId=${policyId}`);
       setAvailableFields(data.data || []);
     } catch (error) {
       console.error("Failed to fetch fields:", error);

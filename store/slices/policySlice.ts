@@ -4,12 +4,14 @@ interface PolicyState {
   currentPolicyId: string | null; // The ID from Step 1 needed for all child records
   activeStep: number;            // Tracks progress through the 6-step flow
   activeTabId: string | null;    // Tracks which tab is currently being viewed in Step 2-4
+  policyJson: any;               // Complete policy structure for AI chat
 }
 
 const initialState: PolicyState = {
   currentPolicyId: null,
   activeStep: 1,
   activeTabId: null,
+  policyJson: null,
 };
 
 const policySlice = createSlice({
@@ -31,11 +33,17 @@ const policySlice = createSlice({
       state.activeTabId = action.payload;
     },
 
+    // Update policy JSON structure
+    setPolicyJson: (state, action: PayloadAction<any>) => {
+      state.policyJson = action.payload;
+    },
+
     // Clears state when a policy is submitted or the user starts a new one
     resetPolicyState: (state) => {
       state.currentPolicyId = null;
       state.activeStep = 1;
       state.activeTabId = null;
+      state.policyJson = null;
     }
   },
 });
@@ -44,6 +52,7 @@ export const {
   setPolicyId, 
   setStep, 
   setActiveTabId, 
+  setPolicyJson,
   resetPolicyState 
 } = policySlice.actions;
 

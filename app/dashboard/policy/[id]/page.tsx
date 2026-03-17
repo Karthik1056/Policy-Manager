@@ -7,6 +7,8 @@ import Link from "next/link";
 import GenerateAIDoc from "@/components/policy-builder/GenerateAIDoc";
 import DownloadPolicyDoc from "@/components/policy-builder/DownloadPolicyDoc";
 import PolicyQueryEngine from "@/components/policy-builder/PolicyQueryEngine";
+import LivePolicyDraft from "@/components/policy-builder/LivePolicyDraft";
+import AnalysisButton from "@/components/policy-builder/AnalysisButton";
 import api from "@/lib/api";
 import toast from "react-hot-toast";
 import { Button } from "@/components/ui/button";
@@ -23,6 +25,8 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
+import { useTabs } from "@/hooks/useHierarchy";
+import type { Tab } from "@/types";
 
 type PolicyComment = {
   id: string;
@@ -42,10 +46,15 @@ export default function PolicyDetailPage() {
   const [comments, setComments] = useState<PolicyComment[]>([]);
   const [newComment, setNewComment] = useState("");
   const [isSubmittingComment, setIsSubmittingComment] = useState(false);
+  const [isDraftPanelOpen, setIsDraftPanelOpen] = useState(false);
 
   const role = String(user?.role || "").toUpperCase();
   const isPolicyAdmin = role === "ADMIN";
   const canEditPolicy = role === "MAKER";
+  const policyId = String(params?.id || "");
+
+  const { data: tabsData = [] } = useTabs(policyId);
+  const tabs = ((tabsData as Tab[])?.length ? (tabsData as Tab[]) : (policy?.tabs || [])) as Tab[];
 
   const getFieldValue = (field: any) => {
     if (field?.thresholdValue) return field.thresholdValue;
@@ -63,8 +72,7 @@ export default function PolicyDetailPage() {
 
   const loadComments = async (policyId: string) => {
     try {
-      const res = await fetch(`/api/policy/${policyId}/comments?_t=${Date.now()}`, { cache: "no-store" });
-      const data = await res.json();
+      const { data } = await api.get(`/policy/${policyId}/comments?_t=${Date.now()}`);
       setComments(data?.data || []);
     } catch {
       setComments([]);
@@ -75,21 +83,16 @@ export default function PolicyDetailPage() {
     if (!params?.id || !newComment.trim() || isSubmittingComment || !isPolicyAdmin) return;
     setIsSubmittingComment(true);
     try {
-      const res = await fetch(`/api/policy/${params.id}/comments`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ comment: newComment.trim() }),
-      });
-      const data = await res.json();
-      if (!res.ok) {
+      const { data } = await api.post(`/policy/${params.id}/comments`, { comment: newComment.trim() });
+      if (!data?.id && data?.message) {
         toast.error(data?.message || "Failed to add comment");
         return;
       }
       setNewComment("");
       await loadComments(String(params.id));
       toast.success("Comment added");
-    } catch {
-      toast.error("Failed to add comment");
+    } catch (error: any) {
+      toast.error(error?.response?.data?.message || "Failed to add comment");
     } finally {
       setIsSubmittingComment(false);
     }
@@ -127,13 +130,10 @@ export default function PolicyDetailPage() {
 
   useEffect(() => {
     if (params && params.id) {
-      fetch(`/api/policy/${params.id}?_t=${Date.now()}`, { cache: "no-store" })
-        .then((res) => res.json())
-        .then((data) => {
-          setPolicy(data.data);
-          setLoading(false);
-        })
-        .catch(() => setLoading(false));
+      api.get(`/policy/${params.id}?_t=${Date.now()}`).then(({ data }) => {
+        setPolicy(data.data);
+        setLoading(false);
+      }).catch(() => setLoading(false));
       loadComments(String(params.id));
     }
   }, [params]);
@@ -151,7 +151,6 @@ export default function PolicyDetailPage() {
           </Button>
           <div className="flex gap-3">
             <GenerateAIDoc policyId={policy.id} policyName={policy.name} />
-            <DownloadPolicyDoc policyId={policy.id} policyName={policy.name} />
             <Button variant="outline" asChild>
               <Link href={`/dashboard/policy/${params?.id}/versions`}>
                 <History size={16} className="mr-2" />
@@ -257,75 +256,28 @@ export default function PolicyDetailPage() {
           </CardContent>
         </Card>
 
-        <div className="bg-white rounded-xl border shadow-sm p-8">
-          <h2 className="text-xl font-bold text-gray-900 mb-6">Policy Flow</h2>
-
-          <div className="flex flex-col items-center space-y-6">
-            <button className="px-6 py-3 bg-gray-900 text-white rounded-full font-semibold">START</button>
-
-            {policy.tabs?.map((tab: any) => (
-              <div key={tab.id} className="w-full max-w-4xl">
-                <div className="flex justify-center mb-4">
-                  <div className="w-px h-8 bg-gray-300"></div>
-                </div>
-
-                <div className="bg-blue-50 border-2 border-blue-200 rounded-lg p-6">
-                  <h3 className="text-sm font-bold text-blue-600 uppercase mb-4">{tab.name}</h3>
-
-                  {(tab.subTabs || tab.subtabs || [])?.map((subTab: any, subTabIndex: number) => (
-                    <div key={subTab.id} className="mb-4 last:mb-0">
-                      <div className="bg-white rounded-lg border-2 border-gray-200 p-4">
-                        <div className="space-y-3">
-                          {(subTab.fields || subTab.subFields || subTab.subfields || [])?.map((field: any, fieldIndex: number) => (
-                            <div key={field.id}>
-                              <div className="flex items-center gap-3">
-                                <div className="w-8 h-8 bg-blue-600 text-white rounded-full flex items-center justify-center text-sm font-bold flex-shrink-0">
-                                  {fieldIndex + 1}
-                                </div>
-                                <div className="flex-1 bg-gray-50 rounded-lg p-3 border">
-                                  <div className="flex items-center gap-4">
-                                    <span className="font-semibold text-gray-900">{field.fieldName}</span>
-                                    <span className="text-gray-500">{field.operator || "="}</span>
-                                    <span className="font-semibold text-blue-600">{getFieldValue(field)}</span>
-                                  </div>
-                                </div>
-                              </div>
-                              {fieldIndex < ((subTab.fields || subTab.subFields || subTab.subfields || [])?.length || 0) - 1 && (
-                                <div className="flex justify-center py-2">
-                                  <span className="px-3 py-1 bg-blue-600 text-white text-xs font-bold rounded">AND</span>
-                                </div>
-                              )}
-                            </div>
-                          ))}
-                        </div>
-                      </div>
-                      {subTabIndex < ((tab.subTabs || tab.subtabs || [])?.length || 0) - 1 && (
-                        <div className="flex justify-center py-3">
-                          <span className="px-3 py-1 bg-gray-700 text-white text-xs font-bold rounded">AND</span>
-                        </div>
-                      )}
-                    </div>
-                  ))}
-                </div>
-              </div>
-            ))}
-
-            {(!policy.tabs || policy.tabs.length === 0) && canEditPolicy && (
-              <div className="text-center py-16 border-2 border-dashed rounded-lg bg-gray-50 w-full">
-                <p className="text-gray-400 text-sm mb-4">No policy rules defined yet</p>
-                <Link href={`/dashboard/maker/${params?.id}/build`} className="inline-flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700">
-                  <Plus size={16} />
-                  Add Rules
-                </Link>
-              </div>
-            )}
-
-            {canEditPolicy && (
-              <button onClick={goToLogicBuilder} className="px-6 py-2 border-2 border-dashed border-gray-300 rounded-lg text-gray-500 hover:border-blue-400 hover:text-blue-600 flex items-center gap-2">
-                <Plus size={16} />
-                Add New Logic Block
-              </button>
-            )}
+        <div className="relative overflow-hidden rounded-xl border bg-white shadow-sm">
+          <div className="p-8">
+            <div className="flex items-center justify-between mb-6">
+              <h2 className="text-xl font-bold text-gray-900">Policy Document</h2>
+              <AnalysisButton 
+                policyData={{
+                  ...policy,
+                  tabs: tabs
+                }}
+                policyId={policyId}
+              />
+            </div>
+            <LivePolicyDraft
+              policyId={policyId}
+              tabs={tabs}
+              policyName={policy?.name}
+              policyDescription={policy?.description}
+              policyProduct={policy?.product}
+              policyVersion={policy?.version}
+              policyStatus={policy?.status}
+              policyStartDate={policy?.startDate || policy?.effectiveDate || policy?.createdAt}
+            />
           </div>
         </div>
       </div>

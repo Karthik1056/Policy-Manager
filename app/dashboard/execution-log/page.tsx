@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from "react";
 import { Search, Filter, Download, Clock, CheckCircle, XCircle } from "lucide-react";
+import api from "@/lib/api";
 
 export default function ExecutionLogPage() {
   const [logs, setLogs] = useState<any[]>([]);
@@ -10,13 +11,10 @@ export default function ExecutionLogPage() {
   const [statusFilter, setStatusFilter] = useState("all");
 
   useEffect(() => {
-    fetch("/api/approval/logs")
-      .then((res) => res.json())
-      .then((data) => {
-        setLogs(data.data || []);
-        setLoading(false);
-      })
-      .catch(() => setLoading(false));
+    api.get("/approval/logs").then(({ data }) => {
+      setLogs(data.data || []);
+      setLoading(false);
+    }).catch(() => setLoading(false));
   }, []);
 
   const filteredLogs = logs.filter((log) => {

@@ -3,6 +3,7 @@
 import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { GitBranch, Search } from "lucide-react";
+import api from "@/lib/api";
 import {
   Table,
   TableBody,
@@ -21,12 +22,10 @@ export default function VersionsPage() {
   const [searchTerm, setSearchTerm] = useState("");
 
   useEffect(() => {
-    fetch("/api/policy/getAll")
-      .then((res) => res.json())
-      .then((data) => {
-        setPolicies(data.data || []);
-        setLoading(false);
-      });
+    api.get("/policy/getAll").then(({ data }) => {
+      setPolicies(data.data || []);
+      setLoading(false);
+    });
   }, []);
 
   const filteredPolicies = policies.filter((p) =>

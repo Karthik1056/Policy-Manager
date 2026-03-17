@@ -2,6 +2,7 @@ import "./globals.css";
 import ReduxProvider from "@/providers/ReduxProvider";
 import QueryProvider from "@/providers/QueryProvider";
 import { Toaster } from "react-hot-toast";
+import GlobalAIAssistant from "@/components/GlobalAIAssistant";
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
@@ -10,8 +11,8 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
         <ReduxProvider>
           <QueryProvider>
             {children}
-            {/* Toaster is placed here so it can be called from anywhere */}
             <Toaster position="top-right" />
+            <GlobalAIAssistant />
           </QueryProvider>
         </ReduxProvider>
       </body>

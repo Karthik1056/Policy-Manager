@@ -31,6 +31,7 @@ export interface PolicyInterface {
     version:string;
     startDate:Date;
     description?:string | null;
+    dynamicFields?: Record<string, any> | null;
     makerId:string;
     checkerId?:string | null;
     createdAt:Date;
@@ -50,6 +51,7 @@ export interface subTabInterface{
     name: string;
     orderIndex : number;
     documentNotes?: string | null;
+    displayMode?: string | null;
     tabId : string;
 }
 

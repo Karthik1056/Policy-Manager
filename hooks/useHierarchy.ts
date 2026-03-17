@@ -13,6 +13,9 @@ export const useTabs = (policyId: string) => {
       return unwrapApiData<Tab[]>(data);
     },
     enabled: !!policyId,
+    staleTime: 0,
+    refetchOnWindowFocus: true,
+    refetchInterval: 1500,
   });
 };
 

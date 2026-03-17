@@ -3,6 +3,7 @@
 import { FileText, Sparkles } from "lucide-react";
 import { useState } from "react";
 import toast from "react-hot-toast";
+import api from "@/lib/api";
 
 interface GenerateAIDocProps {
     policyId: string;
@@ -15,13 +16,8 @@ export default function GenerateAIDoc({ policyId, policyName }: GenerateAIDocPro
     const handleGenerate = async () => {
         setLoading(true);
         try {
-            const response = await fetch(`/api/policy/${policyId}/ai-document`, {
-                method: "POST"
-            });
-            
-            if (!response.ok) throw new Error("Failed to generate document");
-
-            const blob = await response.blob();
+            const response = await api.post(`/policy/${policyId}/ai-document`, {}, { responseType: "blob" });
+            const blob = new Blob([response.data]);
             const url = window.URL.createObjectURL(blob);
             const a = document.createElement("a");
             a.href = url;
@@ -30,7 +26,6 @@ export default function GenerateAIDoc({ policyId, policyName }: GenerateAIDocPro
             a.click();
             window.URL.revokeObjectURL(url);
             document.body.removeChild(a);
-            
             toast.success("AI document generated successfully");
         } catch (error) {
             toast.error("Failed to generate AI document");

@@ -3,6 +3,7 @@
 import { ChevronDown, ChevronRight, Plus, Sparkles, Trash2 } from "lucide-react";
 import { useState } from "react";
 import toast from "react-hot-toast";
+import api from "@/lib/api";
 
 type AIField = {
     fieldName: string;
@@ -178,26 +179,11 @@ export default function AIGeneratePolicy({
 
         setLoading(true);
         try {
-            const response = await fetch("/api/policy/generate-structure", {
-                method: "POST",
-                headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({ prompt })
-            });
-
-            const raw = await response.text();
-            let data: any = null;
-            try {
-                data = raw ? JSON.parse(raw) : null;
-            } catch {
-                throw new Error("Server returned an invalid response format");
-            }
-
-            if (!response.ok) throw new Error(data?.message || "Failed to generate structure");
-
+            const { data } = await api.post("/policy/generate-structure", { prompt });
             setGeneratedStructure(normalizeStructure(data?.data));
             toast.success("Draft generated. You can edit before creating.");
         } catch (error: any) {
-            toast.error(error.message || "Failed to generate structure");
+            toast.error(error?.response?.data?.message || error.message || "Failed to generate structure");
         } finally {
             setLoading(false);
         }

@@ -67,6 +67,11 @@ export default function LoginPage() {
 
       toast.success("Login successful!", { id: loadingToast });
 
+      // Clear all toasts before navigation
+      setTimeout(() => {
+        toast.dismiss();
+      }, 1000);
+
       const normalizedRole = String(user.role || "").toUpperCase();
       if (normalizedRole === "CHECKER") {
         router.push("/dashboard/checker/queue");

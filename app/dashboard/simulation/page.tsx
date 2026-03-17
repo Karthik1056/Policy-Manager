@@ -7,6 +7,7 @@ import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
+import api from "@/lib/api";
 
 export default function SimulationPage() {
   const [policies, setPolicies] = useState<any[]>([]);
@@ -18,13 +19,10 @@ export default function SimulationPage() {
   const [simulating, setSimulating] = useState(false);
 
   useEffect(() => {
-    fetch("/api/policy/getAll")
-      .then((res) => res.json())
-      .then((data) => {
-        setPolicies(data.data || []);
-        setLoading(false);
-      })
-      .catch(() => setLoading(false));
+    api.get("/policy/getAll").then(({ data }) => {
+      setPolicies(data.data || []);
+      setLoading(false);
+    }).catch(() => setLoading(false));
   }, []);
 
   const filteredPolicies = policies.filter((policy) =>
@@ -35,13 +33,9 @@ export default function SimulationPage() {
     setSelectedPolicy(policy);
     setSimulationResult(null);
     setSimulationData({});
-    
-    // Fetch full policy details with tabs/fields
-    fetch(`/api/policy/${policy.id}`)
-      .then((res) => res.json())
-      .then((data) => {
-        setSelectedPolicy(data.data);
-      });
+    api.get(`/policy/${policy.id}`).then(({ data }) => {
+      setSelectedPolicy(data.data);
+    });
   };
 
   const handleSimulate = async () => {
@@ -49,29 +43,19 @@ export default function SimulationPage() {
     
     setSimulating(true);
     try {
-      const response = await fetch("/api/approval/simulate", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          policyId: selectedPolicy.id,
-          testData: simulationData,
-        }),
+      const { data: result } = await api.post("/approval/simulate", {
+        policyId: selectedPolicy.id,
+        testData: simulationData,
       });
-      
-      const result = await response.json();
-      if (response.ok) {
-        const results = result.data;
-        const hasKnockout = results?.some((r: any) => r.status === "KNOCKOUT");
-        setSimulationResult({
-          approved: !hasKnockout,
-          message: hasKnockout ? "Policy conditions not met" : "All conditions passed",
-          details: results
-        });
-      } else {
-        setSimulationResult({ approved: false, message: result.message || "Simulation failed" });
-      }
-    } catch (error) {
-      console.error("Simulation error:", error);
+      const results = result.data;
+      const hasKnockout = results?.some((r: any) => r.status === "KNOCKOUT");
+      setSimulationResult({
+        approved: !hasKnockout,
+        message: hasKnockout ? "Policy conditions not met" : "All conditions passed",
+        details: results
+      });
+    } catch (error: any) {
+      setSimulationResult({ approved: false, message: error?.response?.data?.message || "Simulation failed" });
     } finally {
       setSimulating(false);
     }

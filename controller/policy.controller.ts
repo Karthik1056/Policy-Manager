@@ -9,6 +9,29 @@ export const createPolicy = asyncHandler(async (data: PolicyInterface, userData)
     const status = data.status || "DRAFT";
     const version = data.version || "v1.0";
 
+    const {
+        id: _skipId,
+        makerId: _skipMakerId,
+        checkerId: _skipCheckerId,
+        createdAt: _skipCreatedAt,
+        updatedAt: _skipUpdatedAt,
+        name: _skipName,
+        product: _skipProduct,
+        status: _skipStatus,
+        version: _skipVersion,
+        startDate: _skipStartDate,
+        description: _skipDescription,
+        dynamicFields: incomingDynamicFields,
+        ...unknownDynamicFields
+    } = (data || {}) as any;
+
+    const normalizedDynamicFields = {
+        ...(incomingDynamicFields && typeof incomingDynamicFields === "object" ? incomingDynamicFields : {}),
+        ...unknownDynamicFields,
+    };
+
+    const hasDynamicFields = Object.keys(normalizedDynamicFields).length > 0;
+
     if (!name || !product) {
         throw new ApiError(400, "Name and product are required");
     }
@@ -23,6 +46,14 @@ export const createPolicy = asyncHandler(async (data: PolicyInterface, userData)
             version
         }
     });
+
+    if (hasDynamicFields) {
+        await prisma.$executeRawUnsafe(
+            'UPDATE "PolicyEngine" SET "dynamicFields" = COALESCE("dynamicFields", \'{}\'::jsonb) || $1::jsonb WHERE "id" = $2',
+            JSON.stringify(normalizedDynamicFields),
+            policy.id
+        );
+    }
 
     await prisma.auditLog.create({
         data: {
@@ -44,17 +75,51 @@ export const updatePolicyById = asyncHandler(async (
     const existingPolicy = await prisma.policyEngine.findUnique({ where: { id } });
     if (!existingPolicy) throw new ApiError(404, "Policy not found");
 
-    const filteredData = Object.fromEntries(
-        Object.entries(data).filter(([key, value]) =>
-            value !== undefined && !["id", "createdAt", "updatedAt"].includes(key)
-        )
-    );
+    const {
+        id: _skipId,
+        makerId: _skipMakerId,
+        checkerId: _skipCheckerId,
+        createdAt: _skipCreatedAt,
+        updatedAt: _skipUpdatedAt,
+        dynamicFields: incomingDynamicFields,
+        ...remaining
+    } = (data || {}) as any;
 
-    if (Object.keys(filteredData).length === 0) {
+    const scalarAllowedKeys = ["name", "product", "status", "version", "startDate", "description"] as const;
+    const scalarUpdates: Record<string, any> = {};
+    const unknownDynamicFields: Record<string, any> = {};
+
+    for (const [key, value] of Object.entries(remaining)) {
+        if (value === undefined) continue;
+        if ((scalarAllowedKeys as readonly string[]).includes(key)) {
+            scalarUpdates[key] = value;
+        } else {
+            unknownDynamicFields[key] = value;
+        }
+    }
+
+    let mergedDynamicFields: Record<string, any> | null | undefined = undefined;
+    const incomingDynamic =
+        incomingDynamicFields && typeof incomingDynamicFields === "object"
+            ? (incomingDynamicFields as Record<string, any>)
+            : {};
+
+    const nextDynamic = {
+        ...incomingDynamic,
+        ...unknownDynamicFields,
+    };
+
+    if (Object.keys(nextDynamic).length > 0) {
+        mergedDynamicFields = nextDynamic;
+    }
+
+    const filteredData: Record<string, any> = { ...scalarUpdates };
+
+    if (Object.keys(filteredData).length === 0 && mergedDynamicFields === undefined) {
         return existingPolicy;
     }
 
-    const incomingVersion = typeof filteredData.version === "string" ? filteredData.version : undefined;
+    const incomingVersion = typeof filteredData["version"] === "string" ? filteredData["version"] : undefined;
     if (incomingVersion && incomingVersion !== existingPolicy.version) {
         await createPolicySnapshot(
             id,
@@ -64,10 +129,22 @@ export const updatePolicyById = asyncHandler(async (
         );
     }
 
-    const updatedPolicy = await prisma.policyEngine.update({
-        where: { id },
-        data: { ...filteredData }
-    });
+    const updatedPolicy = Object.keys(filteredData).length > 0
+        ? await prisma.policyEngine.update({
+            where: { id },
+            data: { ...filteredData }
+        })
+        : existingPolicy;
+
+    if (mergedDynamicFields !== undefined) {
+        await prisma.$executeRawUnsafe(
+            'UPDATE "PolicyEngine" SET "dynamicFields" = COALESCE("dynamicFields", \'{}\'::jsonb) || $1::jsonb WHERE "id" = $2',
+            JSON.stringify(mergedDynamicFields),
+            id
+        );
+    }
+
+    const refreshedPolicy = await prisma.policyEngine.findUnique({ where: { id } });
 
     await prisma.auditLog.create({
         data: {
@@ -78,7 +155,7 @@ export const updatePolicyById = asyncHandler(async (
         }
     });
 
-    return updatedPolicy;
+    return refreshedPolicy || updatedPolicy;
 });
 
 export const getAllPolicies = asyncHandler(async () => {

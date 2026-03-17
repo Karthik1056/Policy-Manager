@@ -10,7 +10,7 @@ import SubTabFormDrawer from "./SubTabFormDrawer";
 import FieldFormDrawer from "./FieldFormDrawer";
 import FieldRulesDisplay from "./FieldRulesDisplay";
 import DocumentPreview from "./DocumentPreview";
-import { Plus, Trash2, Edit2, Briefcase } from "lucide-react";
+import { Plus, Trash2, Edit2, Briefcase, LayoutList, Table as TableIcon } from "lucide-react";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -104,12 +104,19 @@ export default function SubTabSection({ tabId }: { tabId: string }) {
   });
 
   const { mutate: createSubTab, isPending } = useMutation({
-    mutationFn: (newSubTab: { name: string; orderIndex: number; tabId: string }) =>
+    mutationFn: (newSubTab: { name: string; orderIndex: number; tabId: string; documentNotes?: string }) =>
       api.post("/subtab/create", newSubTab),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["subTabs", tabId] });
       toast.success("Rule group created!");
       setIsModalOpen(false);
+    },
+    onError: (error: any) => {
+      const message =
+        error?.response?.data?.message ||
+        error?.message ||
+        "Failed to create rule group";
+      toast.error(message);
     },
   });
 
@@ -159,11 +166,12 @@ export default function SubTabSection({ tabId }: { tabId: string }) {
     },
   });
 
-  const handleAddSubTab = (data: { name: string; orderIndex: number }) => {
+  const handleAddSubTab = (data: { name: string; orderIndex: number; documentNotes?: string }) => {
+    const safeOrderIndex = Number.isFinite(data.orderIndex) ? data.orderIndex : (subTabs?.length || 0);
     if (editingSubTab) {
-      updateSubTab({ id: editingSubTab.id, data });
+      updateSubTab({ id: editingSubTab.id, data: { ...data, orderIndex: safeOrderIndex } });
     } else {
-      createSubTab({ ...data, tabId });
+      createSubTab({ ...data, orderIndex: safeOrderIndex, tabId });
     }
   };
 
@@ -269,6 +277,20 @@ export default function SubTabSection({ tabId }: { tabId: string }) {
                 <div className="flex gap-1">
                   <button
                     onClick={() => {
+                      const newMode = subTab.displayMode === "table" ? "document" : "table";
+                      updateSubTab({ id: subTab.id, data: { displayMode: newMode } });
+                    }}
+                    className={`p-1.5 rounded transition-colors ${
+                      subTab.displayMode === "table"
+                        ? "bg-blue-600 text-white"
+                        : "hover:bg-white text-gray-500"
+                    }`}
+                    title={subTab.displayMode === "table" ? "Switch to List View" : "Switch to Table View"}
+                  >
+                    {subTab.displayMode === "table" ? <LayoutList size={14} /> : <TableIcon size={14} />}
+                  </button>
+                  <button
+                    onClick={() => {
                       setEditingSubTab(subTab);
                       setIsModalOpen(true);
                     }}
@@ -289,85 +311,142 @@ export default function SubTabSection({ tabId }: { tabId: string }) {
                 <DocumentPreview content={subTab.documentNotes} className="bg-blue-50 border-blue-200" />
               )}
 
-              {subTab.fields?.map((field: any, fieldIndex: number) => {
-                const fieldLogicKey = `${subTab.id}-field-${fieldIndex}`;
-                const currentFieldLogic = fieldLogic[fieldLogicKey] || "AND";
+              {subTab.displayMode === "table" ? (
+                <div className="bg-white rounded-md border shadow-sm overflow-hidden ml-11">
+                  <table className="w-full text-left text-xs">
+                    <thead className="bg-gray-50 border-b">
+                      <tr>
+                        <th className="px-3 py-2 font-bold text-gray-700 w-8">#</th>
+                        <th className="px-3 py-2 font-bold text-gray-700">Attribute</th>
+                        <th className="px-3 py-2 font-bold text-gray-700">Operator</th>
+                        <th className="px-3 py-2 font-bold text-gray-700">Value</th>
+                        <th className="px-3 py-2 font-bold text-gray-700">Rules/Notes</th>
+                        <th className="px-3 py-2 font-bold text-gray-700 w-16 text-right">Actions</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y">
+                      {subTab.fields?.map((field: any, fieldIndex: number) => (
+                        <tr key={field.id} className="hover:bg-gray-50 group">
+                          <td className="px-3 py-2 text-gray-500 font-medium">{fieldIndex + 1}</td>
+                          <td className="px-3 py-2 font-semibold text-gray-900">{field.fieldName}</td>
+                          <td className="px-3 py-2 text-gray-700">{field.operator || "N/A"}</td>
+                          <td className="px-3 py-2 text-blue-700 font-medium">
+                            {field.thresholdValue || field.fieldValues || "N/A"}
+                          </td>
+                          <td className="px-3 py-2">
+                            <div className="max-w-[150px] truncate text-gray-500" title={field.documentNotes || ""}>
+                              {field.documentNotes || "-"}
+                            </div>
+                          </td>
+                          <td className="px-3 py-2 text-right">
+                            <div className="flex justify-end gap-1 opacity-100 sm:opacity-0 group-hover:opacity-100 transition-opacity">
+                              <button
+                                onClick={() => {
+                                  setEditingField(field);
+                                  setSelectedSubTabId(subTab.id);
+                                  setIsFieldModalOpen(true);
+                                }}
+                                className="p-1 hover:bg-blue-50 rounded text-blue-500"
+                              >
+                                <Edit2 size={12} />
+                              </button>
+                              <button
+                                onClick={() => setDeleteFieldId(field.id)}
+                                className="p-1 hover:bg-red-50 rounded text-red-500"
+                              >
+                                <Trash2 size={12} />
+                              </button>
+                            </div>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                  {(subTab.fields?.length || 0) === 0 && (
+                    <div className="p-4 text-center text-gray-400 italic">No rules in this table yet.</div>
+                  )}
+                </div>
+              ) : (
+                subTab.fields?.map((field: any, fieldIndex: number) => {
+                  const fieldLogicKey = `${subTab.id}-field-${fieldIndex}`;
+                  const currentFieldLogic = fieldLogic[fieldLogicKey] || "AND";
 
-                return (
-                  <div key={field.id}>
-                    <div className="flex gap-3 items-start">
-                      <div className="w-8 h-8 bg-white rounded-full flex items-center justify-center font-bold text-sm text-gray-700 border-2 border-gray-200 flex-shrink-0">
-                        {fieldIndex + 1}
-                      </div>
-
-                      <div className="flex-1 bg-white rounded-md p-3 shadow-sm border">
-                        <div className="flex justify-between items-start mb-2">
-                          <span className="text-xs font-bold text-gray-500 uppercase">{field.fieldName}</span>
-                          <div className="flex gap-1">
-                            <button
-                              onClick={() => {
-                                setEditingField(field);
-                                setSelectedSubTabId(subTab.id);
-                                setIsFieldModalOpen(true);
-                              }}
-                              className="p-1 hover:bg-blue-50 rounded text-blue-500"
-                            >
-                              <Edit2 size={12} />
-                            </button>
-                            <button
-                              onClick={() => setDeleteFieldId(field.id)}
-                              className="p-1 hover:bg-red-50 rounded text-red-500"
-                            >
-                              <Trash2 size={12} />
-                            </button>
-                          </div>
+                  return (
+                    <div key={field.id}>
+                      <div className="flex gap-3 items-start">
+                        <div className="w-8 h-8 bg-white rounded-full flex items-center justify-center font-bold text-sm text-gray-700 border-2 border-gray-200 flex-shrink-0">
+                          {fieldIndex + 1}
                         </div>
 
-                        <div className="grid grid-cols-3 gap-3">
-                          <div>
-                            <label className="block text-xs font-medium text-gray-600 mb-1">Attribute</label>
-                            <div className="px-2 py-1.5 bg-gray-50 border rounded text-xs text-gray-900">
-                              {field.fieldName}
+                        <div className="flex-1 bg-white rounded-md p-3 shadow-sm border">
+                          <div className="flex justify-between items-start mb-2">
+                            <span className="text-xs font-bold text-gray-500 uppercase">{field.fieldName}</span>
+                            <div className="flex gap-1">
+                              <button
+                                onClick={() => {
+                                  setEditingField(field);
+                                  setSelectedSubTabId(subTab.id);
+                                  setIsFieldModalOpen(true);
+                                }}
+                                className="p-1 hover:bg-blue-50 rounded text-blue-500"
+                              >
+                                <Edit2 size={12} />
+                              </button>
+                              <button
+                                onClick={() => setDeleteFieldId(field.id)}
+                                className="p-1 hover:bg-red-50 rounded text-red-500"
+                              >
+                                <Trash2 size={12} />
+                              </button>
                             </div>
                           </div>
-                          <div>
-                            <label className="block text-xs font-medium text-gray-600 mb-1">Operator</label>
-                            <div className="px-2 py-1.5 bg-gray-50 border rounded text-xs text-gray-900">
-                              {field.operator || "N/A"}
-                            </div>
-                          </div>
-                          <div>
-                            <label className="block text-xs font-medium text-gray-600 mb-1">Value</label>
-                            <div className="px-2 py-1.5 bg-gray-50 border rounded text-xs text-gray-900">
-                              {field.thresholdValue || field.fieldValues || "N/A"}
-                            </div>
-                          </div>
-                        </div>
 
-                        <FieldRulesDisplay
-                          rules={field.rules ?? null}
-                          documentNotes={field.documentNotes ?? null}
-                        />
+                          <div className="grid grid-cols-3 gap-3">
+                            <div>
+                              <label className="block text-xs font-medium text-gray-600 mb-1">Attribute</label>
+                              <div className="px-2 py-1.5 bg-gray-50 border rounded text-xs text-gray-900">
+                                {field.fieldName}
+                              </div>
+                            </div>
+                            <div>
+                              <label className="block text-xs font-medium text-gray-600 mb-1">Operator</label>
+                              <div className="px-2 py-1.5 bg-gray-50 border rounded text-xs text-gray-900">
+                                {field.operator || "N/A"}
+                              </div>
+                            </div>
+                            <div>
+                              <label className="block text-xs font-medium text-gray-600 mb-1">Value</label>
+                              <div className="px-2 py-1.5 bg-gray-50 border rounded text-xs text-gray-900">
+                                {field.thresholdValue || field.fieldValues || "N/A"}
+                              </div>
+                            </div>
+                          </div>
+
+                          <FieldRulesDisplay
+                            rules={field.rules ?? null}
+                            documentNotes={field.documentNotes ?? null}
+                          />
+                        </div>
                       </div>
+
+                      {fieldIndex < (subTab.fields?.length || 0) - 1 && (
+                        <div className="flex items-center gap-2 py-2 ml-11">
+                          <label className="text-xs text-gray-500 font-semibold">Logic</label>
+                          <select
+                            value={currentFieldLogic}
+                            onChange={(e) => handleFieldLogicChange(fieldLogicKey, e.target.value as LogicOperator)}
+                            className="px-2 py-1 border rounded text-xs bg-white text-gray-800"
+                          >
+                            <option value="AND">AND</option>
+                            <option value="OR">OR</option>
+                            <option value="XOR">XOR</option>
+                          </select>
+                        </div>
+                      )}
                     </div>
-
-                    {fieldIndex < (subTab.fields?.length || 0) - 1 && (
-                      <div className="flex items-center gap-2 py-2 ml-11">
-                        <label className="text-xs text-gray-500 font-semibold">Logic</label>
-                        <select
-                          value={currentFieldLogic}
-                          onChange={(e) => handleFieldLogicChange(fieldLogicKey, e.target.value as LogicOperator)}
-                          className="px-2 py-1 border rounded text-xs bg-white text-gray-800"
-                        >
-                          <option value="AND">AND</option>
-                          <option value="OR">OR</option>
-                          <option value="XOR">XOR</option>
-                        </select>
-                      </div>
-                    )}
-                  </div>
-                );
-              })}
+                  );
+                })
+              )}
 
               <div className="ml-11">
                 <button

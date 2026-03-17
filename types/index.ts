@@ -22,6 +22,7 @@ export interface SubTab {
   name: string;
   orderIndex: number;
   documentNotes?: string | null;
+  displayMode?: "document" | "table" | null;
   fields?: PolicyField[];
 }
 
